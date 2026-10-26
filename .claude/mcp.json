@@ -1,5 +1,9 @@
 {
   "mcpServers": {
+    "switch-docs": {
+      "type": "http",
+      "url": "https://docs.switchagents.ai/mcp"
+    },
     "switch-trust-mcp": {
       "command": "uvx",
       "args": ["switch-trust-mcp"],
