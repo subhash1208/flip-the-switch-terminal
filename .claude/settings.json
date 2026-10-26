@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Agent",
+      "WebFetch",
+      "WebSearch",
+      "mcp__switch-docs__search_switch_ai",
+      "mcp__switch-docs__query_docs_filesystem_switch_ai",
+      "mcp__memory__search_nodes",
+      "mcp__memory__open_nodes",
+      "mcp__sequential-thinking__sequentialthinking"
+    ]
+  }
+}

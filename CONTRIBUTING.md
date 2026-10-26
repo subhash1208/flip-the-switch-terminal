@@ -196,6 +196,27 @@ Everyone should have:
 - Node.js 22.13+ (for the sample app)
 - Switch Console 0.40.1
 
+## Kiro Permissions Setup
+
+Kiro stores permissions per-user (not in the repo). To auto-allow read tools and sub-agents, create `~/.kiro/settings/permissions.yaml`:
+
+```yaml
+rules:
+  - capability: fs_read
+    effect: allow
+  - capability: subagent
+    effect: allow
+  - capability: mcp
+    match: ['memory/search_nodes', 'memory/open_nodes', 'sequential-thinking/*', 'switch-docs/*']
+    effect: allow
+```
+
+This lets Kiro read files, invoke sub-agents, search memory, and query Switch docs without prompting every time.
+
+## Claude Code Permissions
+
+Claude Code permissions are in `.claude/settings.json` (committed to the repo). When you first open the project, Claude Code will show a workspace trust dialog — accept it to enable the auto-allowed read tools, sub-agent invocation, and MCP access.
+
 ---
 
 ## Questions?
