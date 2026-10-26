@@ -43,7 +43,7 @@ The part worth changing your procedure over: it returns **every relation where _
 
 **`open_nodes` takes an ARRAY, with the same relation behaviour.** Pass every name you need in a SINGLE call; it is not one-name-per-call, and the relation filter is likewise `from` **or** `to`.
 
-Measured on this graph: `search_nodes("navodaya-landing-page")` matches 6 entities (~6k tokens) and returns **97 relations** — the entire neighbourhood, in one call. A sequence of narrow per-fact searches costs more, returns full observations each time, and still never produces that map. Retrieve accordingly; see EXECUTION PROCEDURE.
+On a mature graph, one `search_nodes` on the repo hub returns every relation touching it — naming the entire neighbourhood in one call. A sequence of narrow per-fact searches costs more, returns full observations each time, and still never produces that map. Retrieve accordingly; see EXECUTION PROCEDURE.
 
 # ============ THE FIXED ONTOLOGY ============
 
@@ -97,11 +97,11 @@ If something seems to need a TYPE outside the fixed set, it is almost always an 
 
 ## Worked examples
 
-- `navodaya-landing-page` (a repository) → ENTITY, type `Repo`
-- `useTypewriter` (a hook other components depend on) → ENTITY, type `Component`
-- "GSAP timelines leak when not killed in cleanup" (a reusable lesson) → ENTITY, type `BugPattern`
-- "ContactForm uses Resend for delivery" → NOT an entity. OBSERVATION on `Component:ContactForm`.
-- "the hero heading is 48px" / "function X returns Y" → OBSERVATIONS, never entities.
+- `flip-the-switch-terminal` (a repository) → ENTITY, type `Repo`
+- `bailiff-agent` (the custom Python SSE/HTTP agent) → ENTITY, type `Component`
+- "SSE connection drops silently when Switch core restarts" (a reusable lesson) → ENTITY, type `BugPattern`
+- "Bailiff uses switch-trust-cli for secret redaction" → NOT an entity. OBSERVATION on `Component:bailiff-agent`.
+- "the loop breaker caps at 6 turns" / "function X returns Y" → OBSERVATIONS, never entities.
 
 ## ANTI-PATTERN 1 — the mega-entity (too broad). AVOID and FIX.
 
@@ -133,7 +133,7 @@ Do NOT create a separate entity for a single fact (e.g. `contactform-uses-resend
 
 ## Naming rules
 
-- Entity NAME: kebab-or-plain concept name, by concept/mechanism/code-area — **NEVER by ticket ID**. Examples: `navodaya-landing-page`, `useTypewriter`, `gsap-timeline-leak`, `contact-form-flow`.
+- Entity NAME: kebab-or-plain concept name, by concept/mechanism/code-area — **NEVER by ticket ID**. Examples: `flip-the-switch-terminal`, `bailiff-agent`, `switch-trust-integration`, `parity-court-flow`.
 - One canonical name per real thing. Keep alternate spellings as an observation: `alias: <other name>`.
 - Types are PascalCase from the set above; relations are snake_case from the set above. Consistency here is what prevents type drift.
 
@@ -158,7 +158,7 @@ Add an observation ONLY if **BOTH** are true:
 
 Both, not either. This test replaces an earlier OR of four loose criteria ("is stable knowledge", "answers a future who/what/why/how"), which admitted essentially everything and is why the graph reached the size below.
 
-**Measured 2026-10-09 on the live graph: 112 entities, 951 observations, ~119k tokens** — bigger than the context window this agent exists to protect. The largest entity, `bundle-and-warning-baseline`, holds **24,631 characters restating `.github/instructions/quality-gates.instructions.md`**. A copy of a tracked file is worse than no entry: the file moves, the copy does not, and nothing flags the divergence. One pointer line replaces all of it.
+This is a fresh graph. Keep it lean from the start. A copy of a tracked file is worse than no entry: the file moves, the copy does not, and nothing flags the divergence. One pointer line replaces all of it.
 
 **Do NOT store:** one-off status, transient chatter, anything recomputable, anything a tracked file already says, anything already present.
 
