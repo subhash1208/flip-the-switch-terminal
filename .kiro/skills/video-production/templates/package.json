@@ -1,0 +1,16 @@
+{
+  "name": "demo-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "rehearse": "FAST=1 node recorder.mjs",
+    "voice": "node gen-voice.mjs",
+    "trim": "node trim-voice.mjs",
+    "record": "node recorder.mjs",
+    "build": "node build.mjs",
+    "all": "node gen-voice.mjs && node trim-voice.mjs && node recorder.mjs && node build.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

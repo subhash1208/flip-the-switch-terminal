@@ -1,0 +1,26 @@
+# Generated videos
+*.mp4
+*.wav
+
+# Generated scripts (user-generated, not part of the skill)
+make_video.py
+
+# User-provided media assets
+assets/
+brand/
+
+# Cloned icon repos
+lucide/
+lucide_icons/
+tabler-icons/
+feather/
+heroicons/
+phosphor-icons/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
