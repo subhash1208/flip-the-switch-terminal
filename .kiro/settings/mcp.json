@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "switch-docs": {
+      "type": "http",
+      "url": "https://docs.switchagents.ai/mcp"
+    },
+    "switch-trust-mcp": {
+      "command": "uvx",
+      "args": ["switch-trust-mcp"],
+      "env": {
+        "SWITCH_TRUST_API_KEY": "your-key-here",
+        "SWITCH_TRUST_INSTANCE": "https://app.switchagents.ai"
+      },
+      "disabled": true
+    }
+  }
+}
