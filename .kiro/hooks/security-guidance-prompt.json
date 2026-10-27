@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Security Guidance — Prompt Baseline",
+      "trigger": "UserPromptSubmit",
+      "description": "Captures git baseline SHA on each user prompt for security diff review at stop.",
+      "action": {
+        "type": "command",
+        "command": "python \".kiro/hooks/security-guidance/security_reminder_hook.py\" 2>nul || python3 \".kiro/hooks/security-guidance/security_reminder_hook.py\"",
+        "timeout": 30
+      }
+    }
+  ]
+}

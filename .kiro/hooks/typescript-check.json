@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "TypeScript Type Check",
+      "trigger": "PostToolUse",
+      "description": "Runs tsc --noEmit on edited TypeScript files to surface type errors — same coverage as Claude Code typescript-lsp plugin.",
+      "matcher": "Write|Edit|MultiEdit",
+      "action": {
+        "type": "command",
+        "command": "npx tsc --noEmit --pretty 2>nul || echo {}",
+        "timeout": 60
+      }
+    }
+  ]
+}

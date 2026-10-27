@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Security Guidance — Edit Check",
+      "trigger": "PostToolUse",
+      "description": "Pattern-based security warnings on file edits — checks for hardcoded secrets, SQL injection, command injection, path traversal.",
+      "matcher": "Write|Edit|MultiEdit",
+      "action": {
+        "type": "command",
+        "command": "python \".kiro/hooks/security-guidance/security_reminder_hook.py\" 2>nul || python3 \".kiro/hooks/security-guidance/security_reminder_hook.py\"",
+        "timeout": 30
+      }
+    }
+  ]
+}
