@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Security Guidance — Stop Review",
+      "trigger": "Stop",
+      "description": "LLM-powered git-diff security review when agent finishes — checks for injection, XSS, SSRF, hardcoded secrets, and 25+ vulnerability classes.",
+      "action": {
+        "type": "command",
+        "command": "python \".kiro/hooks/security-guidance/security_reminder_hook.py\" 2>nul || python3 \".kiro/hooks/security-guidance/security_reminder_hook.py\"",
+        "timeout": 120
+      }
+    }
+  ]
+}

@@ -6,12 +6,42 @@
     },
     "switch-trust-mcp": {
       "command": "uvx",
-      "args": ["switch-trust-mcp"],
+      "args": [
+        "switch-trust-mcp"
+      ],
       "env": {
-        "SWITCH_TRUST_API_KEY": "your-key-here",
+        "SWITCH_TRUST_API_KEY": "${SWITCH_TRUST_API_KEY}",
         "SWITCH_TRUST_INSTANCE": "https://app.switchagents.ai"
       },
       "disabled": true
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "d:/Projects/flip-the-switch-terminal/switch-hackathon-knowledge-graph.jsonl"
+      }
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "context7": {
+      "url": "https://mcp.context7.com/mcp",
+      "type": "http"
+    },
+    "github": {
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      },
+      "url": "https://api.githubcopilot.com/mcp/",
+      "type": "http"
     }
   }
 }
