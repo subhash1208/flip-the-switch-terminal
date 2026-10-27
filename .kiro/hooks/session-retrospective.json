@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Session Retrospective",
+      "trigger": "Stop",
+      "description": "When the agent finishes a task, reflect briefly and, only if the session produced a durable fact, delegate consolidation to the memory-updater agent. Skip silently for routine work.",
+      "action": {
+        "type": "agent",
+        "prompt": "RETROSPECTIVE: Before closing out, do a quick self-reflection on what just happened this session.\n\n1. What was accomplished? Summarize in 1-2 sentences.\n\n2. Did this session produce a DURABLE fact — something a future session would pay to rediscover? That means one of:\n   - a root cause or a recurring bug class (the lesson, not a single incident)\n   - an architectural or tooling decision and its rationale\n   - a non-obvious Switch / switch-trust / protocol constraint discovered the hard way\n   - a correction to something the docs or the graph currently get wrong\n   - the user explicitly asked you to remember something\n\n3. If YES → delegate to the `memory-updater` agent. Hand it a cold-start packet: the goal, the specific durable facts (with any version/path/command quoted exactly), and what NOT to touch. The memory-updater is the ONLY writer to the knowledge graph — do not write to memory yourself, and do not call read_graph. It will search-before-write, enforce the fixed ontology, and wire new entities to the repo hub.\n\n4. If NO → skip silently. Routine work produces no durable fact: a doc tweak, a config change, a small fix the error message already explained, a file read, an edit following an existing pattern. Writing nothing is the correct, common outcome. Just confirm \"Nothing durable to save\" and stop.\n\nRespect git-safety: this retrospective never commits, pushes, or branches. It only reflects and, when warranted, consolidates memory. Keep it brief — this is a quick retro, not a report."
+      }
+    }
+  ]
+}

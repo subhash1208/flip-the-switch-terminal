@@ -1,6 +1,17 @@
 {
-  "description": "Slide generation validation hooks for slides-ai-plugin",
+  "description": "Memory lifecycle hooks (read at start, consolidate at stop) + slide generation validation hooks for slides-ai-plugin",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/memory_first.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/memory_first.py\"",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Write|Edit",
@@ -14,6 +25,16 @@
       }
     ],
     "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "RETROSPECTIVE: Before closing out, do a quick self-reflection on what just happened this session.\n\n1. What was accomplished? Summarize in 1-2 sentences.\n\n2. Did this session produce a DURABLE fact — something a future session would pay to rediscover? That means one of:\n   - a root cause or a recurring bug class (the lesson, not a single incident)\n   - an architectural or tooling decision and its rationale\n   - a non-obvious Switch / switch-trust / protocol constraint discovered the hard way\n   - a correction to something the docs or the graph currently get wrong\n   - the user explicitly asked you to remember something\n\n3. If YES, delegate to the memory-updater agent. Hand it a cold-start packet: the goal, the specific durable facts (with any version/path/command quoted exactly), and what NOT to touch. The memory-updater is the ONLY writer to the knowledge graph — do not write to memory yourself, and do not call read_graph.\n\n4. If NO, skip silently. Routine work produces no durable fact: a doc tweak, a config change, a small fix the error message already explained, a file read, an edit following an existing pattern. Writing nothing is the correct, common outcome.\n\nRespect git-safety: this retrospective never commits, pushes, or branches. Keep it brief.",
+            "timeout": 30
+          }
+        ]
+      },
       {
         "matcher": "*",
         "hooks": [

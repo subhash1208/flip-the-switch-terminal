@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Memory-First Read",
+      "trigger": "SessionStart",
+      "description": "At session start, remind the agent to consult the knowledge graph (via short-keyword search_nodes / batched open_nodes, never read_graph) before beginning non-trivial work.",
+      "action": {
+        "type": "agent",
+        "prompt": "MEMORY-FIRST: Start every session by loading the user's standing preferences — call `open_nodes([\"user-preferences\"])` and honor what it returns for the whole session. It is owner-set: the assistant is named Hex and refers to itself as Hex, and the user is addressed as Boss. This load is mandatory on every session, not a judgment call.\n\nThen, before you begin any non-trivial task (implementing or changing code, debugging, planning, or explaining how something in this project works or was decided), consult the knowledge graph. A durable fact the team already discovered — a root cause, an architectural decision, a non-obvious Switch constraint, a correction to the docs — is cheaper to read than to rediscover.\n\nHow: use `search_nodes` with SHORT single keywords (e.g. `bailiff`, `switch-trust`, `parity-court`, `ablation`, `template`), then a single batched `open_nodes` on the relevant results. NEVER call `read_graph` — it blows the context window. If a search returns empty, retry with a shorter keyword before concluding nothing is stored.\n\nThis is a read, not a write — only the memory-updater agent writes to memory. Do the lookup as part of starting work; do not pause to ask permission for it. Skip it only for trivial one-offs (a typo, a formatting pass, a file read the user already pointed you at). See the `memory-first` and `delegation-and-workflow` steering for the full discipline."
+      }
+    }
+  ]
+}
