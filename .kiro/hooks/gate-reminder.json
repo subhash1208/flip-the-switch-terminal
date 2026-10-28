@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Gate Reminder",
+      "trigger": "PostToolUse",
+      "description": "After a source file is edited, reminds which quality gate applies.",
+      "matcher": "Write|Edit|MultiEdit",
+      "action": {
+        "type": "command",
+        "command": "python \".kiro/hooks/scripts/gate_reminder.py\" 2>nul || python3 \".kiro/hooks/scripts/gate_reminder.py\"",
+        "timeout": 10
+      }
+    }
+  ]
+}

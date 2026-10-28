@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Date Context",
+      "trigger": "UserPromptSubmit",
+      "description": "Injects current date/time so the agent does not assume a stale today.",
+      "action": {
+        "type": "command",
+        "command": "python \".kiro/hooks/scripts/date_context.py\" 2>nul || python3 \".kiro/hooks/scripts/date_context.py\"",
+        "timeout": 10
+      }
+    }
+  ]
+}
