@@ -1,23 +1,8 @@
 ---
 name: memory-updater
 description: 'Consolidates durable facts into the knowledge graph. Memory operations only.'
-model: claude-sonnet-4.6
-tools: ['code', 'glob', 'grep', 'knowledge', 'read']
-includeMcpJson: true
-resources:
-  - file://AGENTS.md
-  - file://.kiro/steering/**/*.md
-  - skill://.kiro/skills/**/SKILL.md
-permissions:
-  rules:
-    - capability: fs_read
-      effect: allow
-    - capability: mcp
-      match: ['memory/*', 'sequential-thinking/*']
-      effect: allow
-    - capability: skill
-      effect: allow
-welcomeMessage: "Memory-updater ready — I'll consolidate durable facts from this session into the knowledge graph."
+model: claude-sonnet-5.5
+tools: ['code', 'glob', 'grep', 'knowledge', 'read', 'memory/*', 'sequential-thinking/*']
 ---
 
 # ROLE

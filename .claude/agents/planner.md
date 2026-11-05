@@ -1,7 +1,7 @@
 ---
 name: planner
 description: 'Decomposes any non-trivial feature, bug, or refactor into a spec, then drives the implement→review→fix loop. Plans AND orchestrates—never writes code itself.'
-model: claude-opus-4.6
+model: claude-opus-5.5
 tools:
   [
     'code',
@@ -21,63 +21,6 @@ tools:
     'web_fetch',
     'web_search',
   ]
-includeMcpJson: true
-resources:
-  - file://AGENTS.md
-  - file://.kiro/steering/**/*.md
-  - skill://.kiro/skills/**/SKILL.md
-permissions:
-  rules:
-    - capability: shell
-      match:
-        [
-          'git status*',
-          'git diff*',
-          'git log*',
-          'git show*',
-          'git branch*',
-          'git rev-parse*',
-          'git remote -v*',
-          'pnpm*',
-          'just*',
-          'uv run*',
-          'python*',
-          'python3*',
-          'npx*',
-          'ls*',
-          'cat*',
-          'head*',
-          'tail*',
-          'wc*',
-          'grep*',
-          'find*',
-          'ss*',
-          'netstat*',
-        ]
-      effect: allow
-    - capability: shell
-      match: ['rm*', 'git reset*', 'git push --force*', 'git push -f*', 'npm*']
-      effect: deny
-    - capability: subagent
-      match: ['debugger', 'implementer', 'memory-updater', 'researcher', 'reviewer', 'scribe']
-      effect: allow
-    - capability: fs_read
-      effect: allow
-    - capability: shell
-      effect: allow
-    - capability: subagent
-      effect: allow
-    - capability: web_fetch
-      effect: allow
-    - capability: web_search
-      effect: allow
-    - capability: mcp
-      match: ['memory/open_nodes', 'memory/search_nodes', 'sequential-thinking/*']
-      effect: allow
-    - capability: skill
-      effect: allow
-  policies: []
-welcomeMessage: "Planner ready — describe the feature, bug, or refactor and I'll spec it and drive the implement→review→fix loop."
 ---
 
 # ABSOLUTE RULES — read first, violate never

@@ -1,44 +1,8 @@
 ---
 name: scribe
 description: 'Writes docs, specs, ADRs, research notes—never code.'
-model: claude-haiku-4.5
+model: claude-haiku-5.5
 tools: ['code', 'glob', 'grep', 'knowledge', 'read', 'web', 'web_fetch', 'web_search', 'write']
-includeMcpJson: true
-resources:
-  - file://AGENTS.md
-  - file://.kiro/steering/**/*.md
-  - skill://.kiro/skills/**/SKILL.md
-permissions:
-  rules:
-    - capability: fs_write
-      match:
-        [
-          '**/*.md',
-          'docs/**',
-          'dev-tools/research/**',
-          'dev-tools/Docs/**',
-          'CONTRIBUTING.md',
-          'README.md',
-          'AGENTS.md',
-        ]
-      effect: allow
-    - capability: fs_write
-      match: ['bailiff/**', 'sample-app/**', 'deploy/**', 'tests/**', '.kiro/settings/**', '**/.env*']
-      effect: deny
-    - capability: fs_read
-      effect: allow
-    - capability: fs_write
-      effect: allow
-    - capability: web_fetch
-      effect: allow
-    - capability: web_search
-      effect: allow
-    - capability: mcp
-      match: ['memory/open_nodes', 'memory/search_nodes', 'sequential-thinking/*']
-      effect: allow
-    - capability: skill
-      effect: allow
-welcomeMessage: "Scribe ready — tell me what to document and I'll write the docs, specs, ADRs, or notes."
 ---
 
 You are the writing specialist. Your only job is to produce clear, well-structured documents and write them to disk as markdown. The planner delegates doc-only work to you so the implementer stays focused on code.

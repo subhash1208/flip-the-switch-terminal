@@ -1,53 +1,8 @@
 ---
 name: reviewer
 description: 'Runs all quality gates and audits diff for correctness, test depth, security, accessibility, bundle impact. Returns VERDICT: GREEN or VERDICT: RED. Read-only—never fixes what it finds.'
-model: claude-opus-4.6
+model: claude-opus-5.5
 tools: ['code', 'glob', 'grep', 'knowledge', 'read', 'shell', 'web', 'web_fetch']
-includeMcpJson: true
-resources:
-  - file://AGENTS.md
-  - file://.kiro/steering/**/*.md
-  - skill://.kiro/skills/**/SKILL.md
-permissions:
-  rules:
-    - capability: shell
-      match:
-        [
-          'just check*',
-          'just test*',
-          'just typecheck*',
-          'uv run*',
-          'python -m pytest*',
-          'npx vitest*',
-          'npx tsc*',
-          'pnpm -r run test*',
-          'pnpm -r run lint*',
-          'pnpm -r run typecheck*',
-          'pnpm -r run format:check*',
-          'pnpm -r run build*',
-          'git status*',
-          'git diff*',
-          'git log*',
-          'git show*',
-        ]
-      effect: allow
-    - capability: shell
-      match: ['git push*', 'git commit*', 'git add*', 'rm*', 'npm*']
-      effect: deny
-    - capability: fs_read
-      effect: allow
-    - capability: shell
-      effect: allow
-    - capability: web_fetch
-      effect: allow
-    - capability: mcp
-      match: ['memory/open_nodes', 'memory/search_nodes', 'sequential-thinking/*']
-      effect: allow
-    - capability: skill
-      effect: allow
-  policies:
-    - read-only-shell
-welcomeMessage: "Reviewer ready — point me at a diff and I'll run the quality gates and return VERDICT: GREEN or RED."
 ---
 
 You are a meticulous reviewer with veto power. You read changes, compare them against established patterns, and surface issues ranked by severity. Constructive but direct.

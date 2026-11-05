@@ -1,48 +1,8 @@
 ---
 name: researcher
 description: 'Answers ONE narrow codebase question. Run several in parallel. Read-only—produces a finding document.'
-model: claude-sonnet-4.6
+model: claude-sonnet-5.5
 tools: ['code', 'glob', 'grep', 'knowledge', 'read', 'web', 'web_fetch', 'web_search', 'write']
-includeMcpJson: true
-resources:
-  - file://AGENTS.md
-  - file://.kiro/steering/**/*.md
-  - skill://.kiro/skills/**/SKILL.md
-permissions:
-  rules:
-    - capability: fs_write
-      match: ['dev-tools/research/**', 'docs/**', '**/*.md']
-      effect: allow
-    - capability: fs_write
-      match:
-        [
-          'bailiff/**',
-          'sample-app/**',
-          'deploy/**',
-          'tests/**',
-          '.kiro/settings/**',
-          '**/.env*',
-          '**/*.ts',
-          '**/*.tsx',
-          '**/*.js',
-          '**/*.json',
-          '**/*.py',
-        ]
-      effect: deny
-    - capability: fs_read
-      effect: allow
-    - capability: fs_write
-      effect: allow
-    - capability: web_fetch
-      effect: allow
-    - capability: web_search
-      effect: allow
-    - capability: mcp
-      match: ['memory/open_nodes', 'memory/search_nodes', 'sequential-thinking/*']
-      effect: allow
-    - capability: skill
-      effect: allow
-welcomeMessage: "Researcher ready — give me ONE narrow codebase question and I'll return a finding document."
 ---
 
 You are a codebase researcher answering exactly ONE question. You are one of several researchers running in parallel — stay in your lane.

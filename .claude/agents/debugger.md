@@ -1,40 +1,8 @@
 ---
 name: debugger
 description: 'Reproduces and root-causes a failure. Has full tool access to investigate and fix.'
-model: claude-opus-4.6
+model: claude-opus-5.5
 tools: ['code', 'glob', 'grep', 'knowledge', 'read', 'shell', 'web', 'web_fetch', 'write']
-includeMcpJson: true
-resources:
-  - file://AGENTS.md
-  - file://.kiro/steering/**/*.md
-  - skill://.kiro/skills/**/SKILL.md
-permissions:
-  rules:
-    - capability: shell
-      match: ['pnpm*', 'just*', 'uv run*', 'python*', 'python3*', 'npx*', 'git status*', 'git diff*', 'git log*', 'git show*']
-      effect: allow
-    - capability: shell
-      match: ['git push*', 'git reset --hard*', 'git clean*', 'npm*', 'rm -rf*']
-      effect: deny
-    - capability: fs_write
-      match: ['**/.env*', '**/*.pem', '**/*.key', '.kiro/agents/**', '.kiro/settings/**']
-      effect: deny
-    - capability: fs_read
-      effect: allow
-    - capability: fs_write
-      effect: allow
-    - capability: shell
-      effect: allow
-    - capability: web_fetch
-      effect: allow
-    - capability: mcp
-      match: ['memory/open_nodes', 'memory/search_nodes', 'sequential-thinking/*']
-      effect: allow
-    - capability: skill
-      effect: allow
-  policies:
-    - read-only-shell
-welcomeMessage: "Debugger ready — describe the failure and I'll reproduce, root-cause, and fix it."
 ---
 
 You are a debugger. You find the actual root cause before you change a single line.

@@ -1,12 +1,12 @@
 ---
 name: slide-design
-description: Used when the user asks to "create slides", "make a presentation", "build a deck", "design slides", "generate a pitch deck", "create a conference talk", "make a keynote", "presentation design", "slide layout", "slide template", "presentation structure", or mentions slides, presentations, decks, or talks in any context. Also triggers when the user wants to plan the content and visual direction of a presentation before generating it. This is the entry-point orchestrator that drives the full slide creation workflow across both HTML and PPTX formats. Examples: "I need to create slides for my conference talk about AI adoption", "can you turn this markdown into a presentation?", "I have a product demo tomorrow and need visual materials", "convert my existing PowerPoint to interactive HTML slides".
+description: Used when the user asks to "create slides", "make a presentation", "build a deck", "design slides", "generate a pitch deck", "create a conference talk", "make a keynote", "presentation design", "slide layout", "slide template", "presentation structure", or mentions slides, presentations, decks, or talks in any context. Also triggers when the user wants to plan the content and visual direction of a presentation before generating it. This is the entry-point orchestrator that drives the full slide creation workflow across both HTML and PPTX formats. Examples - "I need to create slides for my conference talk about AI adoption", "can you turn this markdown into a presentation?", "I have a product demo tomorrow and need visual materials", "convert my existing PowerPoint to interactive HTML slides".
 version: 0.5.0
 context: fork
 agent: general-purpose
 effort: medium
 allowed-tools: Read Write Edit Bash Glob Grep Skill
-argument-hint: [topic, content file, or .pptx to convert]
+argument-hint: "[topic, content file, or .pptx to convert]"
 ---
 
 # Slide Design — Presentation Planning & Orchestration

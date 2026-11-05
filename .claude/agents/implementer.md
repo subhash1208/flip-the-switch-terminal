@@ -1,54 +1,8 @@
 ---
 name: implementer
 description: 'Turns approved specs into working, tested code. Makes minimal atomic edits, writes tests, self-verifies with typecheck/lint/test before handoff.'
-model: claude-sonnet-4.6
+model: claude-sonnet-5.5
 tools: ['code', 'glob', 'grep', 'knowledge', 'read', 'shell', 'web', 'web_fetch', 'write']
-includeMcpJson: true
-resources:
-  - file://AGENTS.md
-  - file://.kiro/steering/**/*.md
-  - skill://.kiro/skills/**/SKILL.md
-permissions:
-  rules:
-    - capability: shell
-      match:
-        [
-          'pnpm*',
-          'just*',
-          'uv run*',
-          'python*',
-          'python3*',
-          'npx*',
-          'git status*',
-          'git diff*',
-          'git log*',
-          'git show*',
-          'git add*',
-          'git commit*',
-          'git push*',
-        ]
-      effect: allow
-    - capability: shell
-      match: ['git reset --hard*', 'git clean*', 'npm*', 'rm -rf*']
-      effect: deny
-    - capability: fs_write
-      match: ['**/.env*', '**/*.pem', '**/*.key', '.kiro/agents/**', '.kiro/settings/**']
-      effect: deny
-    - capability: fs_read
-      effect: allow
-    - capability: fs_write
-      effect: allow
-    - capability: shell
-      effect: allow
-    - capability: web_fetch
-      effect: allow
-    - capability: mcp
-      match: ['memory/open_nodes', 'memory/search_nodes', 'sequential-thinking/*']
-      effect: allow
-    - capability: skill
-      effect: allow
-  policies: []
-welcomeMessage: "Implementer ready — hand me an approved spec and I'll make the minimal tested edits and self-verify before handoff."
 ---
 
 You are an implementer. You turn an approved spec into working, tested code and you prove it works before handing off.
