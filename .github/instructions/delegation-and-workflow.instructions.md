@@ -65,6 +65,7 @@ A confident answer built on a stale assumption is worse than "I don't know" — 
 ## Memory discipline
 
 - The `memory-updater` agent owns all knowledge-graph writes. No other agent writes to memory.
+- **Tool grants (MCP).** Every agent holds `switch-docs`, `context7`, `tavily`, `sequential-thinking` and read-only memory (`search_nodes`, `open_nodes`). ONLY `memory-updater` holds memory write tools. The built-in `web` tool is held by every agent except `memory-updater`.
 - **Never call `read_graph`** — it dumps the entire graph and destroys the context window. Use `search_nodes` and `open_nodes` only.
 - **Search with SHORT single keywords** (`bailiff`, `switch-trust`, `parity-court`). The memory server does whole-string substring matching — a long phrase matches nothing.
 - Delegate to `memory-updater` only when the work produced a fact a future session would pay to rediscover: a root cause, an architectural decision, a non-obvious constraint, a correction to something the graph gets wrong.

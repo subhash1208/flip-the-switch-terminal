@@ -116,6 +116,12 @@ def _walk_strings(node: object, keys: tuple[str, ...], depth: int = 0) -> list[s
 
 def evaluate(payload: dict) -> tuple[int, str]:
     """Return (exit_code, reason). Pure, so --self-test exercises the real logic."""
+    tool_name = str(payload.get("toolName") or payload.get("tool_name") or "")
+    if tool_name.endswith("read_graph"):
+        return 2, (
+            "BLOCKED: read_graph dumps the whole knowledge graph; use search_nodes/open_nodes."
+        )
+
     tool_input = payload.get("tool_input") or payload.get("toolInput") or payload.get("toolArgs") or {}
     if isinstance(tool_input, str):
         try:
@@ -230,6 +236,8 @@ CASES: list[tuple[str, dict, int]] = [
                                    "toolArgs": {"command": "Remove-Item -Recurse -Force build"}}, 2),
     ("DELETE with WHERE", {"toolName": "bash",
                            "toolArgs": {"command": "psql -c 'DELETE FROM users WHERE id=1'"}}, 0),
+    ("memory-read_graph", {"toolName": "memory-read_graph", "toolArgs": {}}, 2),
+    ("memory/read_graph", {"toolName": "memory/read_graph", "toolArgs": {"x": 1}}, 2),
     # --- must ALLOW (false-positive regression guards) ---
     ("ordinary source read",
      {"tool_name": "read", "tool_input": {"file_path": "src/components/ui/LoadingScreen.tsx"}}, 0),
