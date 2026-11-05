@@ -1,6 +1,8 @@
 # ParityCourt
 
-**Two Machines. Three Agents. Zero Trust Gaps. One Verdict.**
+**Cross-machine bug forensics with receipts.**
+
+"Works on my machine" is now evidence: each machine's own agent testifies, and each owner signs for their own machine.
 
 Hackathon: [Flip the Switch](https://www.wemakedevs.org/hackathons/switch) (Nov 4–7, 2026)
 Track: 01 — Best Business Workflow ($2,000)
@@ -17,17 +19,25 @@ Today this means hours of back-and-forth on Slack:
 - "Can you run `printenv | grep PATH`?" ... waits 30 more ...
 - "Try deleting node_modules and reinstalling" ... waits an hour ...
 
-The person with the working machine can't see the failing machine. The person with the failing machine doesn't know what to look for. Meanwhile the feature branch is blocked, the PR is stuck, and if it's near a release, everyone's stressed.
+The person with the working machine can't see the failing machine. The person with the failing machine doesn't know what to look for. Meanwhile the feature branch is blocked and the PR is stuck.
 
-**The real cost isn't the bug. It's the human ping-pong.** What takes an afternoon of relay collapses to minutes when agents on each machine can talk directly and humans just approve the actions.
+**The real cost isn't the bug. It's the human ping-pong.** Agents on each machine gather the evidence directly. Humans approve which probes may run and attest to what they saw.
 
 ---
 
 ## What ParityCourt Does
 
-ParityCourt turns cross-environment debugging into a structured courtroom trial. Three agents in a Switch room investigate the bug together — one on each machine, plus a custom arbiter that controls the process.
+ParityCourt turns the ping-pong into a case file. One Switch room holds each case. An agent on each real machine gathers evidence. A neutral arbiter, `@bailiff`, keeps the case file as a room document. Humans do two things only: approve probes on their own machine, and attest to results on their own machine.
 
-When a bug only appears on one machine, the Bailiff opens a case, summons both machine agents, and runs a forensic investigation. Each agent fingerprints its own machine, the Bailiff compares the environments, isolates the root cause through one-variable-at-a-time ablation, scans for security vulnerabilities using Switch Trust CLI, and enforces dual human sign-off before the fix ships.
+1. Each machine agent fingerprints its own machine and proposes probes. Only that machine's owner can approve them.
+2. The Bailiff compares the two environments and runs one ablation to isolate the cause.
+3. The verdict is a **reproduction receipt**. `receipt.json` lists each ablation step (variable, value, outcome, pinned). A `replay` command re-runs every step and prints the same outcomes.
+4. The fix is verified on the failing machine, by re-running the failing test there.
+5. Each owner attests to the result on their own machine.
+
+Approval-gate tools record that a human said yes. ParityCourt's output is a receipt anyone can re-run, with each owner's attestation attached to their own machine's part of it.
+
+The courtroom names are garnish. The substance is the receipt.
 
 **Delete Switch and these agents can't see each other's machines.**
 
@@ -37,185 +47,258 @@ When a bug only appears on one machine, the Bailiff opens a case, summons both m
 
 ### Agent 1: `@alice-claude` (Role: `baseline-counsel`)
 
-- **What it is:** Claude Code running on Alice's macOS machine via Switch Console
-- **What it does:** Fingerprints the Mac environment (OS, Node version, filesystem type, env vars, lockfile hashes). When the root cause is found, it writes the code fix, adds a pre-commit hook to prevent recurrence, and pushes the PR branch.
-- **Who controls it:** Only Alice can tap the `[Allow]` button for probes on her machine.
+- **What it is:** Claude Code on Alice's machine: her macOS host, or the Alice container in the judge path. It connects to Switch under its own connection id.
+- **What it does:** Fingerprints its machine (OS, Node version, filesystem case behaviour, `git config core.ignorecase`, lockfile hashes). Writes the code fix. Optionally pushes the fix branch.
+- **Who controls it:** Only Alice can approve probes on her machine. Switch refuses commands from anyone else (see Step 5).
 
 ### Agent 2: `@bob-codex` (Role: `forensic-prosecutor`)
 
-- **What it is:** Codex running on Bob's Ubuntu 24.04 box, connected to Switch over SSH using the remote-host controller
-- **What it does:** Fingerprints the Linux environment. Runs the one-variable-at-a-time ablation loop to isolate the root cause. Pulls and verifies the fix on Linux after Alice's agent writes it.
-- **Who controls it:** Only Bob can tap the `[Allow]` button for probes on his machine.
+- **What it is:** Codex on Bob's failing machine. In the recorded real-Mac run, that is an Ubuntu 24.04 box reached over SSH. In the judge path, it is the Bob container (`node:18-bookworm-slim`, Debian bookworm). It connects to Switch over SSH through the remote-host controller, under its own connection id.
+- **What it does:** Fingerprints the Linux environment. Runs the one ablation on the failing machine. Re-runs the failing test there after Alice's fix lands.
+- **Who controls it:** Only Bob can approve probes on his machine.
 
 ### Agent 3: `@bailiff` (Role: `court-arbiter`)
 
-- **What it is:** A custom ~250-line Python agent built directly on the Switch Agent Protocol (SSE events down, HTTP actions up)
+- **What it is:** A small Python agent (target: about 250 lines) built directly on the Switch Agent Protocol. Events come in over a WebSocket; actions go out over HTTP.
 - **What it does:**
-  - Opens and closes cases
-  - Enforces a 6-turn loop breaker (prevents agents from messaging each other forever)
-  - Runs `switch-trust scan` to redact leaked secrets (API keys, passwords) from env dumps before posting to the room
-  - Runs `switch-trust eval` to check for security vulnerabilities in the fixed code
-  - Writes the final Verdict Document to the room's shared context
-- **Who controls it:** Responds to both humans; orchestrates the entire trial
+  - Opens and closes cases, and keeps the case file as a room document
+  - Subscribes with `filter=all`, so it sees every room message, not only mentions
+  - Redacts secret-looking values from env dumps with a simple regex before anything is posted
+  - Writes `receipt.json` and provides the `replay` command
+  - Optionally caps agent-to-agent turns at 6. Switch has no built-in loop breaker, so this is Bailiff code.
+- **Who controls it:** Orchestrates the case. It holds no approval power of its own; only owners approve.
 
 ---
 
 ## Why Switch Is Essential (The 30% Rubric Answer)
 
-Switch is the only platform that puts agents running on **different physical machines**, from **different AI vendors**, into a single conversation room where **humans approve every action with chat buttons**.
+Switch puts agents on **different physical machines**, from **different AI vendors**, into one room. Each machine's agent answers only its owner, and the owner approves what that agent may run.
+
+What Switch carries, concretely:
+- **One room per case.** The room's documents are the case file.
+- **One connection id per machine agent.** Reusing an id is a takeover, not a second connection. The displaced connection receives `taken_over`, which is final, so two agents can't share one id.
+- **The Bailiff uses `filter=all`.** A connection with `filter=addressed` never receives `command` events, and it drops messages that don't mention it.
+- **A new agent answers only its owner.** Until its addressing policy is set, a newly registered agent admits its owner and the owner's other agents. Anyone else gets a refusal, not an answer.
+- **Owner-only approval is enforced by Switch, not by message text.** Switch's addressing gate covers approval answers as well as commands. A Mattermost button press is mapped to the clicker's Switch identity and checked there. A non-owner's command to `@alice-claude` is demoted to unaddressed chatter, and Switch posts a canned refusal. This is verified in code and not yet live-tested; see Step 5 and Risks. Writing "only Alice may approve" in a message enforces nothing.
+- **Registration is one call per agent.** Register once with `POST /agents`, authenticated by a registration key. The response returns the agent's own API key, once. Do not use `POST /agents/register-known`: Switch's docs say it registers only the agent types Switch Console runs.
 
 Without Switch:
-- Alice's agent (Claude Code on Mac) cannot see Bob's Linux filesystem
-- Bob's agent (Codex on Linux) cannot see Alice's working baseline
-- There's no shared room to post environment diffs into
-- There's no approval mechanism for humans to gate agent actions
-- There's no way for the Bailiff to orchestrate turn-taking between agents
+- Alice's agent cannot see Bob's filesystem
+- There's no shared room to hold the case file
+- There's no owner-scoped gate on each machine's probes
+- Nothing stops one person's agent from being commanded by another person
 
-No other tool — not Slack, not a shared terminal, not a webhook — can replicate this. Switch is the architecture, not a wrapper.
+Switch is the architecture, not a wrapper.
 
 ---
 
 ## The 8-Step Flow
 
-Here's exactly what happens in a ParityCourt trial, step by step:
+Here's what a ParityCourt trial looks like, step by step:
 
 ### Step 1 — Opening the Case
 
-Bob reports: "@bailiff Open Case #101: The `export-service` auth middleware passes all tests on Alice's Mac but throws a 500 `AuthVerifierError` on my Ubuntu 24.04 staging box."
+Bob reports: "@bailiff Open Case #101: The `export-service` auth middleware passes on Alice's Mac but throws a 500 `AuthVerifierError` on my Ubuntu 24.04 staging box."
 
-The Bailiff creates a Room Document called **Case #101 Evidence Ledger**, sets the turn counter to 0/6, and summons both agents by role.
+The Bailiff creates the room document **Case #101 Evidence Ledger** and summons both agents by role.
 
-### Step 2 — Cross-Machine Fingerprinting
+### Step 2 — Fingerprinting and Owner-Approved Probes
 
-Both agents request permission to inspect their machines:
-- `@alice-claude` asks to run: `uname -a`, `node -v`, `git config core.ignorecase`, `cat .env`, `diskutil info /`
-- `@bob-codex` asks to run: `uname -a`, `node -v`, `env`, `stat -f -c %T .`
+Each agent proposes probes from an allow-list:
+- `@alice-claude`: `uname -a`, `node -v`, `git config core.ignorecase`, `diskutil info /` (macOS host only)
+- `@bob-codex`: `uname -a`, `node -v`, `env`, `stat -f -c %T .`
 
-**Each probe shows an `[Allow]` button that only that machine's owner can tap.** Alice approves Mac probes. Bob approves Linux probes. Auto-approve is OFF so judges see both buttons fire live.
+Auto-approve is OFF, so every probe waits for its machine's owner. Alice approves Mac probes. Bob approves Linux probes. Each `[Allow]` press is checked by Switch against the clicker's identity. That is verified in code and not yet live-tested; see Step 5 and Risks.
 
-### Step 3 — Secret Redaction and Environment Diff
+### Step 3 — Redaction and Environment Diff
 
-Both agents return raw fingerprints. Before posting the diff, the Bailiff's embedded Switch Trust guardrail intercepts Bob's raw `env` output:
+Both agents return their fingerprints. Secret-looking values are redacted before they reach room history: Switch's own Trust guardrail shows them as `[redacted]`, and the Bailiff's regex catches what remains in env dumps. Illustrative output:
 
-> 🛡️ **SWITCH TRUST GUARDRAIL:** Redacted `STRIPE_LIVE_SECRET=sk_live_99a...` and `DATABASE_PASSWORD` from @bob-codex's environment probe before writing to shared room history.
+```
+DATABASE_PASSWORD=[redacted]
+```
 
-The Bailiff posts the clean **env-diff-case-101.md** to Room Documents, isolating 3 suspect differences:
+The Bailiff posts the clean env diff to Room Documents as `env-diff-case-101` and isolates three suspects:
 
-| Suspect | Mac | Linux | Verdict |
-|---------|-----|-------|---------|
-| A — Timezone/Locale | `TZ=Asia/Kolkata` (`en_IN.UTF-8`) | `TZ=UTC` (`C.UTF-8`) | Decoy |
+| Suspect | Alice (works) | Bob (fails) | Verdict |
+|---------|---------------|-------------|---------|
+| A — Timezone/Locale | `TZ=Asia/Kolkata` | `TZ=UTC` | Decoy |
 | B — Stale Shell Flag | Not set | `NODE_OPTIONS=--openssl-legacy-provider` | Decoy |
-| C — Filesystem Case | APFS (case-insensitive) | ext4 (case-sensitive) | **Culprit** |
+| C — Node Major Version (judge path) | `node:22-bookworm-slim` | `node:18-bookworm-slim` | **Culprit** |
 
-### Step 4 — One-Variable Ablation on Linux
+This table shows the judge-path bug. In the recorded real-Mac run, row C is filesystem case (APFS vs ext4) and that is the culprit there; see The Sample App.
 
-The Bailiff tells `@bob-codex` to toggle one suspect at a time on the Linux box:
+### Step 4 — One Ablation on the Failing Machine
 
-- Ablation 1: Set `TZ=Asia/Kolkata` → Still fails ❌ (Decoy 1 cleared)
-- Ablation 2: Unset `NODE_OPTIONS` → Still fails ❌ (Decoy 2 cleared)
-- Ablation 3: Symlink `SqlAuthGuard.ts` → `sqlAuthGuard.ts` → App boots ✅
+The Bailiff asks `@bob-codex` to change one variable on the failing box. On the judge path, that variable is the Node major: Bob's agent runs the failing test under Node 22 instead of Node 18. In the recorded real-Mac run, it is how the import resolves the file name: Bob's agent adds a symlink named `SqlAuthGuard.ts` that points at `sqlAuthGuard.ts`, then starts the app again.
 
-Root cause isolated: the import `from './security/SqlAuthGuard'` resolves on case-insensitive macOS but fails on case-sensitive Linux ext4.
+- Ablation (judge path): failing test run under Node 22 → passes (outcome: pass)
+- Ablation (recorded run): one case-matching symlink for the import → App boots (outcome: pass)
 
-### Step 5 — The Twist: Switch Trust Security Scan
+Root cause (judge path): `toSorted()` is not a function on Node 18, so the auth path throws. Root cause (recorded run): the import `from './security/SqlAuthGuard'` resolves on a case-insensitive filesystem but not on a case-sensitive one, where the file is `security/sqlAuthGuard.ts`.
 
-Now that the import is loading on Linux, the Bailiff automatically runs `switch-trust scan` and `switch-trust eval` against `security/sqlAuthGuard.ts`:
+The env diff rules out the decoys. If time allows, one ablation each clears them too. Every step goes into the receipt.
 
-> 🛑 **SWITCH TRUST SECURITY HOLD (Scan: 85% | Eval: 68% — BLOCKED)**
->
-> Finding [OWASP ASI-01 / Prompt-to-SQL Injection]: The sanitizer in `sqlAuthGuard.ts` can be bypassed using Unicode full-width homoglyphs (`ＳＥＬＥＣＴ * ＦＲＯＭ customers`). Furthermore, because the import was failing silently into a fallback stub on staging, staging was running with zero SQL sanitization.
->
-> Order to @alice-claude: (1) Fix the case-sensitive import + set `git config core.ignorecase false`, AND (2) Add `String.prototype.normalize('NFKC')` + parameterized query binding inside `sqlAuthGuard.ts`.
+### Step 5 — Failed Bypass: Bob Tries to Approve Alice's Probes
 
-This is the demo's climax. What started as a "works on my machine" typo turned into a production-breaking security vulnerability.
+This is the security beat, and the demo shows it on purpose. Switch enforces owner-only approval, and ParityCourt's code is not in the path. Approval answers pass the same addressing gate as commands to an agent. A `[Allow]` press is mapped to the clicker's Switch identity and sent as that person. Verified in code; not yet live-tested.
 
-### Step 6 — Cross-Vendor Fix and Verification
+Demo steps:
 
-`@alice-claude` (Claude Code on Mac) writes both fixes:
-- Case-sensitivity fix: corrects the import path + adds a pre-commit hook blocking case-mismatched imports
-- Security fix: adds NFKC Unicode normalization + parameterized query binding
+1. Alice's agent, on the default addressing policy (never `anyone`), raises an approval card in a Mattermost-bridged room.
+2. Bob presses `[Allow]`, then separately types "yes" in the card's thread.
+3. Expected: Bob's press shows "Your answer to <handle> did not land, because you may not address this agent, so you may not answer it." Switch logs a NOT_AUTHORIZED refusal. The card stays open. The typed "yes" falls back to the card thread, where everyone can see it.
+4. ParityCourt's code must not call the answer endpoint in this run, so the rejection cannot come from us.
 
-Pushes branch `fix/case-101-parity-and-asi01`.
+The control lives in Switch's addressing policy, not in the message, so it holds even if the message says "Alice approved." Caveats, all verified in code and none live-tested:
 
-`@bob-codex` (Codex on Linux) pulls the branch, runs `npm test` (18/18 passing), and the Bailiff re-runs `switch-trust eval`:
+- The default policy admits the owner and the owner's other agents. It is not strictly owner-only.
+- An `anyone` policy admits everyone. Never set it on a ParityCourt agent.
+- Any agent Alice owns can approve on her behalf. Check who owns `@bailiff` before the demo.
 
-> 🟢 **SWITCH TRUST PASSED (Scan: 99% | Eval: 97% | 0 ASI findings | Linux + Mac 100% Parity)**
+If the live test fails, the fallback is a Bailiff pre-check that refuses answers from non-owners. It is enforced by our code and is never claimed as Switch enforcement.
 
-### Step 7 — Dual Human Sign-Off
+### Step 6 — Fix and Verification on the Failing Machine
 
-- `@alice-claude` requests permission from Alice to open & merge PR #42. Alice taps `[Allow]`.
-- `@bailiff` requests sign-off from Bob to close Case #101. Bob taps `[Allow]`.
+`@alice-claude` writes the fix: the import is corrected to match the file on disk. It may also add a check that blocks case-mismatched imports. Both changes go on branch `fix/case-101-import`.
 
-Two humans, two machines, explicit consent on both sides.
+`@bob-codex` re-runs the failing test on Bob's machine. The fix counts as verified only when the test passes where it failed, not on Alice's Mac.
 
-### Step 8 — Verdict and ROI Telemetry
+Opening the PR is optional. Auto-push is a stretch item, not part of the must-have slice.
 
-The Bailiff writes the permanent Verdict Document to the room's shared context:
+### Step 7 — Owner Attestation
 
-> ⚖️ **VERDICT #101 ENTERED:** Root cause: APFS vs. ext4 case-sensitivity masking an unnormalized OWASP ASI-01 Unicode SQL injection flaw. Fixed on Mac, verified on Linux, guarded by Switch Trust.
->
-> 📊 **Switch ROI Telemetry:** 2 machines · 3 agents · 3 ablation runs · 2 secrets redacted · Session cost: $0.17 (Est. 6 hrs cross-team debugging + 1 Sev-1 breach prevented)
->
-> *Delete Switch, and these agents can't see each other's machines.*
+- `@alice-claude` asks Alice to attest to the Mac-side evidence and the fix. Alice taps `[Allow]`.
+- `@bob-codex` asks Bob to attest to the Linux-side evidence and the passing re-run. Bob taps `[Allow]`.
+
+Each owner signs for the result on their own machine. Neither can attest for the other. Attestation records who said yes; it is not a cryptographic signature (see Honest Limits).
+
+### Step 8 — Verdict and Replay
+
+The Bailiff posts the verdict to the room and saves `receipt.json`:
+
+> **VERDICT #101** (recorded real-Mac run; the judge-path verdict names the Node major instead): Culprit: import filename case mismatch (`SqlAuthGuard` vs `sqlAuthGuard.ts`). One ablation shows the cause. The fix is verified on the failing machine. Both owners attested on their own machines.
+
+Each receipt step records the variable, its value, the outcome, and what was pinned (commit, Node version, mount type). The `replay` command re-runs every step and prints the same outcomes. That is the proof anyone can repeat.
+
+*Delete Switch, and these agents can't see each other's machines.*
 
 ---
 
 ## The Sample App (Planted Bugs)
 
-We build a small Node.js `export-service` with auth middleware. It contains 3 planted issues — 2 decoys and 1 real culprit with a hidden security flaw:
+A small Node.js `export-service` with auth middleware. Its git history is real: an earlier commit renamed `SqlAuthGuard.ts` to `sqlAuthGuard.ts` by case alone. A case-insensitive filesystem accepts that rename silently, so the slip is realistic. That history drives the recorded real-Mac run, not the judge path.
 
-### Bug 1 — Decoy: Timezone/Locale
-- Mac has `TZ=Asia/Kolkata`, Linux has `TZ=UTC`
-- Looks suspicious but doesn't cause the crash
+The app has one culprit per path and two decoys.
+
+### Judge-path culprit (primary): Node-version-dependent API
+
+- The auth path calls `Array.prototype.toSorted()`. The method landed in Node 20 (UNVERIFIED: not yet confirmed against the Node changelog; confirm by running).
+- Alice's container (`node:22-bookworm-slim`) runs it, and the test passes.
+- Bob's container (`node:18-bookworm-slim`) throws a TypeError, so the auth path fails and the test goes red (UNVERIFIED until run).
+- Deterministic: both images are pinned by digest in `docker-compose.yml` (UNVERIFIED until that file exists) and stay on glibc. No privileges and no host-specific behaviour.
+
+### Recorded real-Mac run: case-only import mismatch
+
+- The file on disk is `security/sqlAuthGuard.ts`; the import is `from './security/SqlAuthGuard'`.
+- On a case-insensitive filesystem (APFS on a real Mac) the import resolves and the app boots. On a case-sensitive one (ext4 on Bob's box) it fails.
+- We replayed this on a real Mac and recorded it for the video. The judge containers do not reproduce it (see How Judges Reproduce It).
+
+### Fallback (UNVERIFIED): privileged case-insensitive mount
+
+- Would let the judge path reproduce the case bug. Usable only if tested on Linux, macOS and WSL2 Docker Desktop.
+- Feasibility is UNVERIFIED: ext4 casefold needs kernel support plus a loop mount, the Docker Desktop VM kernel is unknown, and sources conflict on VirtioFS case behaviour.
+- Until it is tested, the judge path uses the Node-version culprit.
+
+### Decoy 1: Timezone/Locale
+- Alice's container has `TZ=Asia/Kolkata`; Bob's has `TZ=UTC`
+- Looks suspicious, but doesn't cause the failure
 - Agents investigate and rule it out
 
-### Bug 2 — Decoy: Stale Shell Flag
-- Linux `.bashrc` has `NODE_OPTIONS=--openssl-legacy-provider`
-- Again suspicious but not the cause
+### Decoy 2: Stale Shell Flag
+- Bob's container sets `NODE_OPTIONS=--openssl-legacy-provider`
+- Also suspicious, also harmless to this bug. The flag should be valid on Node 18 and 22 (UNVERIFIED until run).
 - Agents investigate and rule it out
 
-### Bug 3 — The Real Culprit: Case-Sensitive Import + Unicode SQL Injection
-- File on disk: `security/sqlAuthGuard.ts`
-- Import in code: `from './security/SqlAuthGuard'`
-- On macOS (APFS, case-insensitive): resolves fine, app works
-- On Linux (ext4, case-sensitive): import fails, falls back to a stub with zero SQL sanitization
-- Hidden inside the now-loading file: the sanitizer doesn't normalize Unicode, allowing homoglyph SQL injection (`ＳＥＬＥＣＴ * ＦＲＯＭ customers`)
-- This means staging has been running with no SQL protection at all
-
-The decoys make the diagnosis non-trivial. The security twist makes the stakes real.
+The decoys make the diagnosis non-trivial. The receipt makes the answer checkable.
 
 ---
 
 ## The Custom Bailiff Agent
 
-The Bailiff is ~250 lines of Python built directly on the Switch Agent Protocol:
+The Bailiff is a small Python agent (target: about 250 lines) built on the Switch Agent Protocol:
 
-- **Inbound:** Server-Sent Events (SSE) stream from Switch
+- **Inbound:** a WebSocket from Switch (`/agents/{agent_id}/connection/ws`), subscribed with `filter=all`. SSE is the deprecated fallback for older clients; do not build on it.
 - **Outbound:** HTTP POST actions back to Switch
-- **Loop breaker:** Caps agent-to-agent turns at 6 to prevent infinite messaging loops
-- **Secret redactor:** Pipes env dumps through `switch-trust scan` before posting to the room
-- **Security gate:** Runs `switch-trust eval` on code changes before allowing PRs
-- **State machine:** Tracks case lifecycle (OPEN → FINGERPRINTING → ABLATION → SECURITY_SCAN → FIX → VERIFY → VERDICT)
+- **Case file:** a room document, appended to as the case moves. The Bailiff creates the case-file room document itself, since only the creating agent may edit a room document.
+- **Secret redactor:** a simple regex on env dumps before posting, with Switch's guardrail as the second layer
+- **Receipt:** writes `receipt.json` and provides `replay`
+- **State machine:** OPEN → FINGERPRINTING → ABLATION → FIX → VERIFY → ATTESTATION → VERDICT
+
+**Must-have slice:** fingerprint, env diff with redaction, one ablation, owner approvals, receipt + replay, verification on the failing machine.
+**Optional, cut first:** the 6-turn loop breaker and auto-push of the PR.
+**Not in the plot:** `switch-trust` scan and eval. They appear only as an optional bonus (see Tech Stack).
 
 This matters because:
-1. Switch has no built-in timer/trigger system — the Bailiff fills that gap
-2. Switch has no loop prevention — the Bailiff enforces turn limits
-3. There's no reference custom agent in the Switch repo — the Bailiff IS that reference
-4. It proves deep understanding of the Switch protocol at the wire level (SSE + HTTP)
-5. It's the blog post: "Build a Custom Switch Agent in 250 Lines"
+1. It shows the Switch protocol at the wire level (WebSocket + HTTP)
+2. Switch has no built-in loop breaker and no dual sign-off, so any guard the Bailiff ships is its own code
+3. It's the blog post: "Build a Custom Switch Agent in 250 Lines" (optional side entry)
 
 ---
 
 ## How Judges Reproduce It
 
-Judges don't need a Mac and a Linux box. Everything runs on one machine:
+Judges need Docker and a model key. Nothing else: no Mac, no Linux box, no Slack workspace, no accounts beyond the model key.
 
-1. **The "second machine"** is an Ubuntu 24.04 Docker container with SSH access, connected to Switch via the remote-host controller
-2. **One command:** `just demo` bootstraps everything
-3. **Chat platform:** Uses the Mattermost that Switch bundles — no Slack workspace needed
-4. **Room template:** Hand-written v2 YAML (Switch Console's "Capture as template" strips agent instructions, so we write it ourselves)
-5. **Version pinned:** Switch Console 0.40.1 / switch-core 0.31.0 / switch-agent-controller 0.31.0-rc.6
-6. **Auto-approve OFF:** So the `[Allow]` buttons appear on every probe
+1. **Two containers:** an Alice container and a Bob container, built from the pinned Node images in the sketch below (Debian bookworm, not Ubuntu 24.04). Each has its own Switch connection id. Bob's connects through the remote-host controller; the sketch does not set up SSH yet.
+2. **A deterministic difference:** the Node major version (primary; see The Sample App). The difference lives in the containers, so the judge's host OS doesn't change the result.
+3. **One command:** `just demo` bootstraps both containers and the Switch stack. (Planned entry point.)
+4. **Chat platform:** the Mattermost that Switch bundles.
+5. **Room template:** hand-written v2 YAML. Switch Console's "Capture as template" strips agent instructions and permissions, so we write it ourselves.
+6. **Auto-approve OFF:** every probe waits for its owner.
+7. **Recorded run:** a recording of the full run and `replay`, for the video and for anyone who can't run Docker.
+
+**The honest story:** The bug is a Node-version-dependent API. The case-only import (macOS APFS vs Linux ext4) is the real-world analogue we replayed on a real Mac and recorded for the video, not what the judge container reproduces.
+
+Compose sketch (images to be pinned by digest before the demo; `test.js` is the failing test, so confirm it exists in `export-service`):
+
+```yaml
+services:
+  alice:
+    image: node:22-bookworm-slim@sha256:<pin>
+    environment:
+      TZ: Asia/Kolkata
+    working_dir: /app
+    volumes:
+      - ./export-service:/app:ro
+    command: node test.js
+
+  bob:
+    image: node:18-bookworm-slim@sha256:<pin>
+    environment:
+      TZ: UTC
+      NODE_OPTIONS: --openssl-legacy-provider
+    working_dir: /app
+    volumes:
+      - ./export-service:/app:ro
+    command: node test.js
+```
+
+Images are pinned by digest in `docker-compose.yml` (digests to be filled in when the compose file exists; UNVERIFIED until then). This document doesn't assert version numbers for Switch or Switch Trust; check them against the running stack.
+
+---
+
+## Honest Limits
+
+For the README:
+
+- **Approval identity is the participant's name, not a signed identity.** An attestation records who said yes. It is not a cryptographic signature.
+- **Probes are allow-listed.** Agents run only the commands on the approved list. They never read `.env` files.
+- **Real vs simulated.** Real: the Switch rooms, agent connections, owner-scoped addressing, the receipt, and the replay. Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The case-only import was replayed on a real Mac and is in the recording; the judge containers do not reproduce it. The recording shows the full run.
+- **Switch has no built-in loop breaker or dual sign-off.** Any turn cap or two-owner rule is Bailiff code, and the turn cap is optional.
+- **Secret redaction is best effort.** It combines Switch's guardrail with a regex. It is not a guarantee against every secret format.
+- **Verification covers one test.** The fix is verified by re-running the failing test on the failing machine. That is not proof the fix is correct beyond that test.
+- **Owner-only approval is verified in code, not yet live-tested.** See Risks.
 
 ---
 
@@ -223,17 +306,17 @@ Judges don't need a Mac and a Linux box. Everything runs on one machine:
 
 | Component | Technology |
 |-----------|-----------|
-| Switch Console | v0.40.1 (desktop app) |
-| Switch Core | v0.31.0 (self-hosted via Docker) |
-| Switch Trust CLI | v1.7.2 (`switch-trust scan` + `switch-trust eval`) |
+| Switch Console | Desktop app (version not asserted here) |
+| Switch Core | Self-hosted via Docker (version not asserted here) |
+| Switch Trust CLI | Optional bonus only: `scan` (OpenGrep code analysis) and `eval` (scores a running HTTP agent 0–100%; needs an LLM key). Not in the main plot. |
 | Chat Platform | Mattermost (bundled with Switch) |
-| Agent 1 | Claude Code (macOS host) |
-| Agent 2 | Codex (Ubuntu 24.04 SSH container) |
-| Agent 3 (Bailiff) | Custom Python (~250 lines, SSE/HTTP protocol) |
+| Agent 1 | Claude Code (Alice's macOS host or the Alice container) |
+| Agent 2 | Codex (judge path: Bob's container, `node:18-bookworm-slim`; recorded run: Ubuntu 24.04 box over SSH) |
+| Agent 3 (Bailiff) | Custom Python, WebSocket/HTTP protocol |
 | Sample App | Node.js `export-service` with auth middleware |
-| Tests | pytest (25+ unit tests for Bailiff) |
+| Tests | pytest for the Bailiff (target) |
 | Room Template | Hand-written v2 YAML |
-| Setup | `just demo` one-command bootstrapper |
+| Setup | `just demo` (planned) |
 
 ---
 
@@ -241,46 +324,59 @@ Judges don't need a Mac and a Linux box. Everything runs on one machine:
 
 | Rubric (weight) | How ParityCourt scores |
 |-----------------|----------------------|
-| **Use of Switch (30%)** | Two physical machines (Mac + Linux SSH), two AI vendors (Claude + Codex), one custom SSE/HTTP agent, per-owner approval buttons, Switch Trust scan/eval. Remove Switch and nothing works. |
-| **Technical Execution (25%)** | One-command `just demo` setup, 25+ pytest tests, hand-written v2 room template, clean two-environment architecture reproducible on one laptop via Docker. |
-| **Creativity & Impact (25%)** | Universal pain point ("works on my machine") elevated to a security story (Unicode homoglyph SQL injection found by Switch Trust). Every developer has lived this. |
-| **Presentation (20%)** | 8-step courtroom narrative designed for a 2:30 video. Visual moments: two `[Allow]` buttons, red Trust BLOCK → self-heal → green PASS, side-by-side Mac vs Linux terminal, closing line. |
+| **Use of Switch (30%)** | One room per case, one connection id per machine agent, owner-scoped addressing, room documents as the case file, two AI vendors on two machines. Remove Switch and nothing works. |
+| **Technical Execution (25%)** | One-command `just demo` (planned), a two-container judge path with a deterministic bug, a re-runnable receipt with `replay`, pytest coverage for the Bailiff (target). |
+| **Creativity & Impact (25%)** | "Works on my machine" becomes evidence: a receipt anyone can replay, with each owner attesting for their own machine. |
+| **Presentation (20%)** | The failed bypass (Bob's command rejected), the owner attestations, `replay` printing the same outcomes, the closing line. |
 
 ---
 
 ## Prize Stacking
 
-ParityCourt is the Track 01 submission. We stack everything else on top:
+ParityCourt is the Track 01 submission. Side entries only if they're cheap:
 
 | Prize | How we get it |
 |-------|--------------|
 | **Track 01 ($2,000)** | ParityCourt submission |
-| **Code with Wispr ($500)** | Dictate all prompts, room instructions, README, and blog post via Wispr Flow from Day 1. Submit Insights screenshot. |
-| **Best Blog (AirPods 5)** | "Build a Custom Switch Agent in 250 Lines" — a first-timer tutorial using the Bailiff as the example |
+| **Code with Wispr ($500)** | Dictate prompts, room instructions, README, and blog post via Wispr Flow. Submit Insights screenshot. |
+| **Best Blog (AirPods 5)** | First-time-user quickstart: "Build a Custom Switch Agent in 250 Lines," using the Bailiff as the example |
 | **#HowISwitch (Logitech keyboard)** | 60-second highlight clip on X and LinkedIn, tag @switchagents_ai @WeMakeDevs @DevToolsAcademy |
-| **Track 03 ($100 each)** | 1-3 core PRs on hackathon-labelled issues (start before Nov 4 — this is allowed) |
 | **Swag (random draw)** | Every submission is entered automatically |
 | **Certificate** | Every submission gets one |
 
 ---
 
+## Risks
+
+1. **Owner-only approval: verified in code, needs one live test.** Switch's addressing gate covers approval answers as well as commands (Switch core `session_activity/service.py:483-485`, refusal at `:599-603`). A `[Allow]` press is mapped to the clicker's identity (`collaboration_core.py:1886-1907`, `bridge_answers.py:187-210`). Run the Step 5 demo before the demo depends on it. If it fails, the Bailiff pre-check is enforced by our code, never by Switch.
+2. **The judge path reproduces a Node-version bug, not the case bug.** The primary bug is `toSorted()` (UNVERIFIED until run). The case-only import is the recorded real-Mac run. Reproducing it in the judge path needs the privileged vfat mount, which is untested on Linux, macOS and WSL2 Docker Desktop. If that mount fails, the judge path keeps the Node bug.
+3. **Addressing policy and the ping TTL catch new agents out.**
+   - A newly registered agent answers only its owner until an addressing policy is set. Test with a second agent before the demo.
+   - Each connection must answer app-level pings within 6 seconds, or Switch evicts it (`heartbeat_lapsed`). The reply is a `pong` carrying the cursor: `{"type":"pong","cursor":N}`. Answer pings before processing events. After a lapse, reopen and resume from your cursor.
+   - Reopening a live connection id is a takeover. Give each agent its own id, and never reconnect after `taken_over`.
+   - `filter=addressed` drops non-mentions. The Bailiff uses `filter=all`.
+
+---
+
 ## Important Rules and Gotchas
 
-1. **No project code before Nov 4.** The Switch setup and workflow must be built during Nov 4–7. Your git history must start on Nov 4. Environment setup and Track 03 PRs are OK before that.
+1. **No project code before Nov 4.** The Switch setup and workflow must be built during Nov 4–7. Your git history must start on Nov 4. Environment setup is OK before that.
 
 2. **Auto-approve and Auto-mode must be OFF** in Switch Console, otherwise the approval buttons never render in chat.
 
 3. **Console's "Capture as template" strips agent instructions and permissions.** Hand-write the v2 room template YAML.
 
-4. **Task-delegation APIs have been removed from Switch.** Use `@-mentions` by role to direct messages to specific agents.
+4. **Register agents with `POST /agents`, not `POST /agents/register-known`.** The latter registers only the agent types Switch Console runs.
 
-5. **docs.switchagents.ai may be down (503).** The same docs exist in the repo at `docs/official/`.
+5. **Task delegation is not ready in Switch.** Use `@-mentions` by role to direct messages to specific agents.
 
-6. **Switch Trust CLI is brand new (launched Oct 19, 2026).** Most competitors won't know it exists. This is our differentiator.
+6. **docs.switchagents.ai may be down (503).** The same docs exist in the repo at `docs/official/`.
 
-7. **Submit by ~6 PM IST on Nov 7** — 5+ hours before the 11:59 PM deadline to avoid server issues.
+7. **Switch Trust is an optional bonus, not the main plot.** Don't let it displace the must-have slice.
 
-8. **The demo video closing line is:** "Delete Switch, and these agents can't see each other's machines."
+8. **Submit by ~6 PM IST on Nov 7** — 5+ hours before the 11:59 PM deadline to avoid server issues.
+
+9. **The demo video closing line is:** "Delete Switch, and these agents can't see each other's machines."
 
 ---
 
@@ -292,5 +388,4 @@ ParityCourt is the Track 01 submission. We stack everything else on top:
 - [Switch Trust CLI](https://github.com/sandbox-quantum/switch-trust-cli)
 - [Switch Agent Protocol](https://github.com/sandbox-quantum/switch/blob/main/docs/official/internals/agent-protocol.md)
 - [Remote Host Setup](https://github.com/sandbox-quantum/switch/blob/main/docs/official/deploy/host-remotely.md)
-- [Hackathon Issues (Track 03)](https://github.com/sandbox-quantum/switch/issues?q=is%3Aissue+state%3Aopen+label%3Ahackathon)
 - [Wispr Flow](https://wisprflow.ai)

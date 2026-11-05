@@ -1,3 +1,5 @@
+> STALE as of 2026-11-05: the idea was revised after the rival scan and Opus review. `docs/PARITYCOURT.md` is the source of truth. This schedule still shows the old plot (Trust SQL-injection twist, dual sign-off, Ubuntu SSH judge path, `anyone` addressing for the bailiff, SSE transport) and must be rewritten once roles are assigned.
+
 # Development Timeline & Work Split
 
 Team: Terminal
