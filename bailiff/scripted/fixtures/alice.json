@@ -11,6 +11,14 @@
     "git config core.ignorecase": {"exit_code": 0, "stdout": "true\n"},
     "printenv TZ": {"exit_code": 0, "stdout": "Europe/London\n"},
     "printenv NODE_OPTIONS": {"exit_code": 0, "stdout": "--max-old-space-size=4096\n"},
-    "node test.js": {"exit_code": 0, "stdout": "suite: 4 passed\n"}
+    "node test.js": {"exit_code": 0, "stdout": "suite: 4 passed\n"},
+    "diskutil info /": {
+      "exit_code": 0,
+      "stdout": "   File System Personality:  APFS\n   Type (Bundle):  apfs\n"
+    },
+    "shasum -a 256 package-lock.json": {
+      "exit_code": 0,
+      "stdout": "4c1e0a9d7b3f5e28a6c04d9b1f7e3a52c8d6b09e4f2a7c1d5e8b3f6a9c0d2e7  package-lock.json\n"
+    }
   }
 }

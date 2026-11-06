@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 
-from bailiff.events import Event, Malformed, parse_event
+import pytest
+
+from bailiff.events import MAX_FRAME_CHARS, RES, Event, Malformed, parse_event, read_wire
 
 WEIRD: list[str | bytes] = [
     "",
@@ -46,17 +48,23 @@ def test_message_frame_maps_to_event_fields() -> None:
             "data": {
                 "type": "message",
                 "room_id": "r1",
-                "payload": {"sender": "dana", "body": "!open case x", "message_id": "m7"},
+                "payload": {
+                    "sender": "@switch-user-1:x",
+                    "sender_name": "Dana",
+                    "body": "!open case x",
+                    "message_id": "m7",
+                },
                 "sequence": 7,
             },
         }
     )
     ev = parse_event(raw)
     assert isinstance(ev, Event)
-    assert (ev.type, ev.room_id, ev.sender, ev.text, ev.cursor) == (
+    assert (ev.type, ev.room_id, ev.sender, ev.sender_name, ev.text, ev.cursor) == (
         "message",
         "r1",
-        "dana",
+        "@switch-user-1:x",
+        "Dana",
         "!open case x",
         7,
     )
@@ -75,3 +83,47 @@ def test_message_with_wrong_field_types_is_malformed_with_a_reason() -> None:
     )
     assert isinstance(result, Malformed)
     assert "missing" in result.reason
+
+
+def _res(**fields: object) -> str:
+    return json.dumps({"request_id": "r1", "machine": "alice", "exit_code": 0, **fields})
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"BAILIFF-RES ```json\n{_res()}\n```",
+        f"BAILIFF-RES   {_res()}",
+        f" BAILIFF-RES {_res()}",
+        f"Done, here it is. BAILIFF-RES {_res()} Thanks!",
+        f"I will answer with BAILIFF-RES once ready. BAILIFF-RES {_res()}",
+        f'BAILIFF-RES {{"note": 1}} BAILIFF-RES {_res()}',
+    ],
+)
+def test_read_wire_finds_the_reply_through_fences_spaces_and_chatter(text: str) -> None:
+    assert read_wire(text, RES) == json.loads(_res())
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        None,
+        "no marker here",
+        f"BAILIFF-REQ {_res()}",
+        "BAILIFF-RES [1, 2]",
+        'BAILIFF-RES {"request_id": ',
+        'BAILIFF-RES {"exit_code": 0}',
+        "BAILIFF-RES {" + '"a":' + "[" * 100_000,
+        f"BAILIFF-RES {'{x} ' * 60}{_res()}",
+        "BAILIFF-RES " + _res() + " " * MAX_FRAME_CHARS,
+    ],
+)
+def test_read_wire_rejects_what_is_not_a_reply(text: str | None) -> None:
+    assert read_wire(text, RES) is None
+
+
+def test_read_wire_skips_a_quoted_request_and_takes_the_reply_that_has_an_exit_code() -> None:
+    request = '{"request_id": "r1", "machine": "bob", "kind": "probe", "argv": ["uname"]}'
+    reply = '{"request_id": "r1", "machine": "bob", "exit_code": 0}'
+    text = f"BAILIFF-RES for BAILIFF-REQ {request} then BAILIFF-RES {reply}"
+    assert read_wire(text, RES, ("request_id", "exit_code")) == json.loads(reply)

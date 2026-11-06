@@ -19,6 +19,7 @@ class Event:
     text: str | None
     raw: str
     cursor: int | None
+    sender_name: str | None = None  # display only: free text, never an identity
 
 
 @dataclass(frozen=True)
@@ -67,19 +68,21 @@ def _parse(raw: str | bytes) -> Event | Malformed:
     if not isinstance(data, dict):
         return Malformed("data is not an object", preview)
     sender: str | None = None
+    sender_name: str | None = None
     body: str | None = None
     if frame_type == "message":
         payload = data.get("payload")
         if not isinstance(payload, dict):
             return Malformed("message without payload", preview)
         sender = _str(payload.get("sender"))
+        sender_name = _str(payload.get("sender_name"))
         body = _str(payload.get("body"))
         if sender is None or body is None:
             return Malformed("message missing sender or body", preview)
     cursor = _int(obj.get("id"))
     if cursor is None:
         cursor = _int(data.get("sequence"))
-    return Event(frame_type, _str(data.get("room_id")), sender, body, text, cursor)
+    return Event(frame_type, _str(data.get("room_id")), sender, body, text, cursor, sender_name)
 
 
 def detail(ev: Event) -> dict[str, Any]:
@@ -93,15 +96,32 @@ def message_id(ev: Event) -> str | None:
     return _str(payload.get("message_id")) if isinstance(payload, dict) else None
 
 
-def read_wire(text: str | None, marker: str) -> dict[str, Any] | None:
-    """The JSON object that follows `marker ` in a room message, or None."""
-    if text is None:
+# shortcut: bounds the `{` candidates tried per message; raise if replies get more chatter
+MAX_BRACES = 50
+
+
+def read_wire(
+    text: str | None, marker: str, required: tuple[str, ...] = ("request_id",)
+) -> dict[str, Any] | None:
+    """The first JSON object holding every `required` key that follows `marker`, or None.
+
+    Tolerant of fences, extra spaces and chatter; a quoted request is skipped by the next try.
+    """
+    if text is None or len(text) > MAX_FRAME_CHARS:
         return None
-    start = text.find(marker + " ")
-    if start < 0:
-        return None
-    try:
-        obj, _ = json.JSONDecoder().raw_decode(text, start + len(marker) + 1)
-    except json.JSONDecodeError:
-        return None
-    return obj if isinstance(obj, dict) else None
+    decoder = json.JSONDecoder()
+    tried = 0
+    at = text.find(marker)
+    while at >= 0:
+        brace = text.find("{", at + len(marker))
+        while brace >= 0 and tried < MAX_BRACES:
+            tried += 1
+            try:
+                obj, _ = decoder.raw_decode(text, brace)
+            except (ValueError, RecursionError):
+                obj = None
+            if isinstance(obj, dict) and all(key in obj for key in required):
+                return obj
+            brace = text.find("{", brace + 1)
+        at = text.find(marker, at + len(marker))
+    return None

@@ -87,6 +87,10 @@ class SwitchConnection:
         clock: Callable[[], float] = time.monotonic,
         stable_after: float = 10.0,
     ) -> None:
+        if not rooms:
+            raise ValueError(
+                "rooms must name at least one room; scope=single delivers nothing without one"
+            )
         self._base = base_url.rstrip("/")
         self._agent_id = agent_id
         self._api_key = api_key
@@ -103,6 +107,7 @@ class SwitchConnection:
         self.generation: int | None = None
         self.malformed = 0
         self.redactions = 0
+        self.gaps = 0
 
     def _auth(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}", **(extra or {})}
@@ -156,6 +161,16 @@ class SwitchConnection:
                     info = detail(frame)
                     if frame.type == "evicted" and info.get("code") == "taken_over":
                         raise TakenOver("taken over by another connection; not reconnecting")
+                    if frame.type == "evicted" and info.get("code") == "closed":
+                        raise SwitchRefused(
+                            f"Switch closed the connection: {info.get('reason', 'no reason given')}"
+                        )
+                    if frame.type == "gap":
+                        # Skipped events: the frame is yielded; caller does not yet re-read history.
+                        self.gaps += 1
+                        resumed_at = info.get("resumed_at")
+                        if isinstance(resumed_at, int):
+                            self.cursor = resumed_at
                     if frame.type == "connection_state" and isinstance(info.get("generation"), int):
                         self.generation = info["generation"]
                     if frame.cursor is not None and (

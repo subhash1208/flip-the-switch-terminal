@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from bailiff import agent
+from bailiff.transport import SwitchRefused
 
 
 class _FakeConnection:
@@ -93,3 +94,15 @@ async def test_an_invalid_receipt_exits_1_with_a_clear_error_and_writes_nothing(
     assert await agent._main_async() == 1
     assert "error: invalid receipt: receipt.steps" in capsys.readouterr().out
     assert not switch_env.exists()
+
+
+@pytest.mark.asyncio
+async def test_a_closed_connection_exits_1_with_the_reason(
+    monkeypatch: pytest.MonkeyPatch, switch_env: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    async def closed_serve(conn: object, room_id: str, **kwargs: Any) -> dict[str, Any]:
+        raise SwitchRefused("Switch closed the connection: agent deleted")
+
+    monkeypatch.setattr(agent, "serve", closed_serve)
+    assert await agent._main_async() == 1
+    assert "error: Switch closed the connection: agent deleted" in capsys.readouterr().out

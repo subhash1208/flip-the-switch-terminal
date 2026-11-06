@@ -8,6 +8,7 @@ _ALLOWED: frozenset[tuple[str, ...]] = frozenset(
         ("stat", "-f", "-c", "%T", "."),
         ("diskutil", "info", "/"),
         ("sha256sum", "package-lock.json"),
+        ("shasum", "-a", "256", "package-lock.json"),
         ("env",),
         ("node", "test.js"),
         ("/opt/node22/bin/node", "test.js"),

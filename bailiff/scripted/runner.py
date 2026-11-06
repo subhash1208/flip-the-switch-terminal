@@ -78,7 +78,12 @@ def fixture_runner(path: Path) -> Runner:
 async def answer(req: dict[str, Any], machine: str, run: Runner) -> dict[str, Any]:
     """Answer one Bailiff request. Re-checks the allow-list and refuses anything outside it."""
     kind = req.get("kind")
-    base: dict[str, Any] = {"request_id": req.get("request_id"), "machine": machine, "kind": kind}
+    base: dict[str, Any] = {
+        "request_id": req.get("request_id"),
+        "machine": machine,
+        "kind": kind,
+        "exit_code": None,  # every reply carries it: the Bailiff's reply check keys on it
+    }
     if kind == "attest":
         return {**base, "approval": APPROVAL}
     cmd = req.get("argv") if kind == "probe" else req.get("cmd")
