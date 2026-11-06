@@ -2,13 +2,13 @@
 
 **"Works on my machine" is now evidence: each machine's own agent testifies, and each owner signs for their own machine.**
 
-Hackathon: [Flip the Switch](https://www.wemakedevs.org/hackathons/switch) (Nov 4–7, 2026), Track 01 Best Business Workflow. Team Terminal.
+Hackathon: [Flip the Switch](https://www.wemakedevs.org/hackathons/switch) (Nov 4–7, 2026), Track 01 — Best Business Workflow. Team Terminal.
 
 ---
 
 ## How Switch is used
 
-ParityCourt is three Switch agents working one bug case in one Switch room. Each real machine has its own agent. A neutral arbiter runs the case.
+ParityCourt is three Switch agents working on one bug case in one Switch room. Each real machine has its own agent. A neutral arbiter runs the case.
 
 | Agent | Runs on | What it does | Who may approve its probes |
 |---|---|---|---|
@@ -20,7 +20,7 @@ ParityCourt is three Switch agents working one bug case in one Switch room. Each
 
 - One room per case. The room's documents are the case file.
 - The Bailiff creates the case-file document itself, because only the agent that creates a room document may edit it.
-- Each agent has its own connection id. Reusing an id is a takeover: the displaced connection receives `taken_over`, which is final.
+- Each agent has its own connection ID. Reusing an ID is a takeover: the displaced connection receives `taken_over`, which is final.
 - The Bailiff subscribes with `filter=all`. A connection with `filter=addressed` never receives `command` events.
 - A newly registered agent answers only its owner and the owner's other agents until its addressing policy is changed.
 
@@ -30,15 +30,15 @@ ParityCourt is three Switch agents working one bug case in one Switch room. Each
 - Outbound: HTTP calls to Switch.
 - Custom agents: register each one once with `POST /agents`. Not `POST /agents/register-known`: that endpoint covers only the agent types Switch Console runs.
 
-**Owner-only approval** is enforced by Switch's addressing gate, not by message text. The gate covers approval answers as well as commands, so a `[Allow]` press is checked against the clicker's Switch identity. Verified by reading Switch core code (`session_activity/service.py:483-485` and `:599-603`). Live test: `(to be verified)`. Keep the default addressing policy; never set `anyone`.
+**Owner-only approval** is enforced by Switch's addressing gate, not by message text. The gate covers approval answers as well as commands, so an `[Allow]` press is checked against the clicker's Switch identity. Verified by reading Switch core code (`session_activity/service.py:483-485` and `:599-603`). Live test: `(to be verified)`. Keep the default addressing policy; never set `anyone`.
 
-*Delete Switch and these agents can't see each other's machines. There is no shared room for the case file and no owner-scoped gate on each machine's probes.*
+*Delete Switch, and these agents can't see each other's machines. There is no shared room for the case file and no owner-scoped gate on each machine's probes.*
 
 ---
 
 ## The 60-second story
 
-What one case run is designed to show. The offline demo simulates steps 3 and 4 with canned output. On a live Switch room they are `(to be verified)`.
+This is what one case run is designed to show. The offline demo simulates steps 3 and 4 with canned output. In a live Switch room, steps 3 and 4 are `(to be verified)`.
 
 1. **Fingerprint both machines.** Each agent runs its allow-listed probes (`uname -a`, `node -v`, `env`, `git config core.ignorecase`). Its owner approves each one.
 2. **Redacted env diff.** Secret-looking values are masked before they reach room history. The Bailiff posts the clean diff to the case file.
@@ -55,7 +55,7 @@ What one case run is designed to show. The offline demo simulates steps 3 and 4 
 
 - Python 3.11+ (`requires-python` in [`pyproject.toml`](pyproject.toml)). CI runs 3.11 and 3.12. The offline demo was run on Python 3.13 on Windows.
 - [`just`](https://github.com/casey/just). On Windows, `just` needs `sh` on PATH, for example from Git for Windows. Without `just`, use the plain `python` commands; they always work.
-- Docker, only for the container replay and the judge-path check
+- Docker (only needed for the container replay and the judge-path check)
 
 ```
 python -m pip install -e .           # the one prerequisite
@@ -107,7 +107,7 @@ The live entry point is the Bailiff agent process, `python -m bailiff.agent`.
 
 ## Privacy
 
-Nothing personal or secret should reach the room that the LLM agents read. Masking runs on probe output, posted messages, the case-file document and `receipt.json`. Fingerprint comparison runs on raw values in memory only; raw values are never stored or posted.
+Nothing personal or secret should reach the room that the LLM agents read. Masking runs on probe output, posted messages, the case-file document and `receipt.json`. Fingerprint comparison runs on raw values in memory only; they are never stored or posted.
 
 The masking code is [`bailiff/redact.py`](bailiff/redact.py). It is regex plus checksum, deterministic, linear-time, idempotent, and it never raises. Each message is capped at 64 KB; anything beyond the cap becomes a `[truncated N chars]` marker.
 
@@ -198,7 +198,7 @@ justfile, pyproject.toml       commands and project metadata
 ## Quality
 
 - **572 tests pass** with `python -m pytest -q` (`just test`). Branch coverage is 94 percent; the CI gate is 90 percent.
-- **Property tests.** hypothesis tests cover the redactor and the PII masking ([`tests/test_redact_properties.py`](tests/test_redact_properties.py), [`tests/test_pii_properties.py`](tests/test_pii_properties.py)).
+- **Property tests.** Hypothesis tests cover the redactor and the PII masking ([`tests/test_redact_properties.py`](tests/test_redact_properties.py), [`tests/test_pii_properties.py`](tests/test_pii_properties.py)).
 - **Strict types and lint.** `mypy --strict` over `bailiff/` (`just typecheck`) and `ruff` over `bailiff`, `tests` and `scripts` (`just check`) are clean.
 - **CI: 8 jobs, all green.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) covers lint, types and tests on Python 3.11 and 3.12 with the coverage gate; bandit, pip-audit and gitleaks; a Node job (Node 22 must pass, Node 18 must fail with `toSorted is not a function`); the Docker judge path; actionlint; and an aggregate `ci-ok` job. Dependabot and pre-commit are configured. The repo is private, so there is no badge yet.
 <!-- CI badge: add after the repo is public -->
