@@ -7,8 +7,7 @@ Registers the Bailiff and both machine agents under pc-live-* names (a re-run ro
 keys), opens a room with the Bailiff's key, and runs the case over real WebSockets. Alice and Bob
 are scripted: they answer from the canned fixtures, so the receipt can be replayed against Bob's
 fixture. With `alice_agent` (--alice-agent NAME) a Console-registered agent plays Alice instead,
-and a human adds it to the room before the case opens. Agent keys stay in memory; never printed
-or saved.
+named when the room is created. Agent keys stay in memory; never printed or saved.
 """
 
 from __future__ import annotations
@@ -145,7 +144,7 @@ class _Tap:
 
 
 async def _await_join(bailiff: SwitchConnection, room: str, handle: str) -> None:
-    """Wait until Switch writes the room_join for the agent a human added in Console."""
+    """Wait until Switch writes the room_join for the agent named when the room was created."""
     last = "no read_context reply"
     try:
         async with asyncio.timeout(JOIN_TIMEOUT_S):
@@ -168,15 +167,21 @@ async def run_live(
     """Run one case on `base`; writes transcript.txt and receipt.json to `evidence`.
 
     `alice_agent` is a Console-registered agent that plays Alice in place of the scripted one.
-    Nothing registers or connects it: a human adds it to the room before the case opens.
+    Nothing registers or connects it: it is named in create_room, and Switch must accept that.
     """
     scripted = not alice_agent
     alice = alice_agent or LIVE["alice"]
     registered = (BAILIFF, *LIVE.values()) if scripted else (BAILIFF, LIVE["bob"])
+    names = list(registered) if scripted else [*registered, alice]
     headers = {"Authorization": f"Bearer {token}"}
     async with httpx.AsyncClient(base_url=base, timeout=10, headers=headers) as http:
         keys = {name: await _register(http, name) for name in registered}
-    room = await _create_room(base, keys[BAILIFF], list(registered))
+    try:
+        room = await _create_room(base, keys[BAILIFF], names)
+    except LiveError as exc:
+        if scripted:
+            raise
+        raise LiveError(f"could not create the room with @{alice}: {exc}") from exc
     print(f"room: {room}")
 
     def connect(agent: str) -> SwitchConnection:
@@ -227,9 +232,9 @@ async def run_live(
                 ) from None
             if not scripted:
                 print(
-                    f"waiting for @{alice} to join {room}: in Switch Console, open {alice}"
-                    " and choose Add to room; if it does not answer, check Console's"
-                    f' "Who can talk to your agent" for {alice}'
+                    f"waiting for @{alice} to join {room} (it was named when the room was created);"
+                    f' if it does not answer, check Console\'s "Who can talk to your agent"'
+                    f" for {alice}"
                 )
                 await _await_join(bailiff, room, alice)
             await bob.post(room, OPENING)

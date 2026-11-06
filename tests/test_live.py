@@ -322,6 +322,52 @@ async def test_real_alice_reply_forged_by_another_member_is_counted_and_ignored(
     assert receipt["baseline"]["outcome"] == "pass"  # the forged exit 1 was not the answer
 
 
+def _spy_on_create_room(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Record the agent names each create_room call names, then return a room as usual."""
+    named: list[list[str]] = []
+
+    async def create_room(base: str, bailiff: tuple[str, str], names: list[str]) -> str:
+        named.append(names)
+        return "room-live"
+
+    monkeypatch.setattr(live, "_create_room", create_room)
+    return named
+
+
+@pytest.mark.asyncio
+async def test_default_run_names_the_three_scripted_agents_when_it_creates_the_room(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    named = _spy_on_create_room(monkeypatch)
+    await asyncio.wait_for(live.run_live("http://switch.test", "tok", tmp_path), 30)
+    assert named == [["pc-live-bailiff", "pc-live-alice", "pc-live-bob"]]
+
+
+@pytest.mark.asyncio
+async def test_real_alice_is_named_when_the_room_is_created(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    named = _spy_on_create_room(monkeypatch)
+    await _run_with_claude(live_room, tmp_path)
+    assert named == [["pc-live-bailiff", "pc-live-bob", "alice-claude"]]
+
+
+@pytest.mark.asyncio
+async def test_real_alice_refused_at_room_creation_is_a_named_error(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    async def refuse(base: str, bailiff: tuple[str, str], names: list[str]) -> str:
+        raise LiveError("create_room failed with HTTP 422: unknown agent alice-claude")
+
+    monkeypatch.setattr(live, "_create_room", refuse)
+    with pytest.raises(
+        LiveError,
+        match=r"could not create the room with @alice-claude: create_room failed with HTTP 422",
+    ):
+        await live.run_live("http://switch.test", "tok", tmp_path, alice_agent="alice-claude")
+    assert not (tmp_path / "receipt.json").exists()
+
+
 @pytest.mark.asyncio
 async def test_real_alice_who_never_joins_is_a_named_error(
     live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
