@@ -27,19 +27,19 @@ The person with the working machine can't see the failing machine. The person wi
 
 ## What ParityCourt Does
 
-ParityCourt turns the ping-pong into a case file. One Switch room holds each case. An agent on each real machine gathers evidence. A neutral arbiter, `@bailiff`, keeps the case file as a room document. Humans do two things only: approve probes on their own machine, and attest to results on their own machine.
+ParityCourt turns the ping-pong into a case file. One Switch room holds each case. An agent on each real machine gathers evidence. A neutral arbiter, `@bailiff`, keeps the case file as a room document. Humans do only two things: approve probes on their own machine, and attest to results on their own machine.
 
 1. Each machine agent fingerprints its own machine and proposes probes. Only that machine's owner can approve them.
 2. The Bailiff compares the two environments and runs one ablation to isolate the cause.
 3. The verdict is a **reproduction receipt**. `receipt.json` lists each ablation step (variable, value, outcome, pinned). A `replay` command re-runs every step and prints the same outcomes.
-4. The fix is verified on the failing machine, by re-running the failing test there.
+4. The fix is verified on the failing machine by re-running the failing test there.
 5. Each owner attests to the result on their own machine.
 
 Approval-gate tools record that a human said yes. ParityCourt's output is a receipt anyone can re-run, with each owner's attestation attached to their own machine's part of it.
 
 The courtroom names are garnish. The substance is the receipt.
 
-**Delete Switch and these agents can't see each other's machines.**
+**Delete Switch, and these agents can't see each other's machines.**
 
 ---
 
@@ -53,7 +53,7 @@ The recorded run and the judge path differ in who runs each agent. In the record
 - **What it does:** Fingerprints its machine (OS, Node version, filesystem case behaviour, `git config core.ignorecase`, lockfile hashes). Writes the code fix. Optionally pushes the fix branch.
 - **Who controls it:** Only Alice can approve probes on her machine. Switch refuses commands from anyone else (see Step 5).
 
-### Agent 2: Bob, a scripted machine agent in the judge path (handle `@bob-codex`, Role: `forensic-prosecutor`)
+### Agent 2: `@bob-codex` (Role: `forensic-prosecutor`)
 
 - **What it is:** The scripted Bob agent on Bob's failing machine. In the recorded run, that is a `node:18` Linux container on Santhan's Mac. In the judge path, it is the Bob container (`node:18-bookworm-slim`, Debian bookworm). It is planned to connect to Switch through the remote-host controller, under its own connection id. SSH is not yet set up.
 - **What it does:** Fingerprints the Linux environment. Runs the one ablation on the failing machine. Re-runs the failing test there after Alice's fix lands.
@@ -142,7 +142,7 @@ The env diff rules out the decoys. If time allows, one ablation each clears them
 
 ### Step 5 — Failed Bypass: Bob Tries to Approve Alice's Probes
 
-This is the security beat, and the demo shows it on purpose. Switch enforces owner-only approval, and ParityCourt's code is not in the path. Approval answers pass the same addressing gate as commands to an agent. A `[Allow]` press is mapped to the clicker's Switch identity and sent as that person. Verified in code; not yet live-tested.
+This is the security beat, and the demo shows it on purpose. Switch enforces owner-only approval, and ParityCourt's code is not in the path. Approval answers pass the same addressing gate as commands to an agent. An `[Allow]` press is mapped to the clicker's Switch identity and sent as that person. Verified in code; not yet live-tested.
 
 Demo steps:
 
@@ -197,7 +197,7 @@ The git history is real: an earlier commit renamed `SqlAuthGuard.ts` to `sqlAuth
 - The auth path calls `Array.prototype.toSorted()`. The method landed in Node 20 (UNVERIFIED: not yet confirmed against the Node changelog; confirm by running).
 - Alice's side runs it on Node 22 (real Claude Code on the Mac in the recorded run; `node:22-bookworm-slim` container in the judge path), and the test passes.
 - Bob's container (`node:18-bookworm-slim` in the judge path; `node:18` container in the recorded run) throws a TypeError, so the auth path fails and the test goes red (UNVERIFIED until run).
-- Deterministic: both images are meant to be pinned by digest in `deploy/docker-compose.yml` (`(to be verified)`) and stay on glibc. No privileges and no host-specific behaviour.
+- Deterministic: both images are meant to be pinned by digest in `deploy/docker-compose.yml` `(to be verified)` and stay on glibc. No privileges and no host-specific behaviour.
 
 ### Optional bonus clip: case-only import mismatch (10 seconds, same Mac)
 
@@ -218,7 +218,7 @@ The git history is real: an earlier commit renamed `SqlAuthGuard.ts` to `sqlAuth
 
 ### Decoy 2: Stale Shell Flag
 - Bob's container sets `NODE_OPTIONS=--openssl-legacy-provider`
-- Also suspicious, also harmless to this bug. The flag should be valid on Node 18 and 22 (UNVERIFIED until run).
+- Also suspicious, but not the cause of this bug. The flag should be valid on Node 18 and 22 (UNVERIFIED until run).
 - Agents investigate and rule it out
 
 The decoys make the diagnosis non-trivial. The receipt makes the answer checkable.
@@ -387,7 +387,7 @@ ParityCourt is the Track 01 submission. Side entries only if they're cheap:
 
 ## Risks
 
-1. **Owner-only approval: verified in code, needs one live test.** Switch's addressing gate covers approval answers as well as commands (Switch core `session_activity/service.py:483-485`, refusal at `:599-603`). A `[Allow]` press is mapped to the clicker's identity (`collaboration_core.py:1886-1907`, `bridge_answers.py:187-210`). Run the Step 5 demo before the demo depends on it. If it fails, the Bailiff pre-check is enforced by our code, never by Switch. Finding (Nov 6, unverified end to end): custom Python agents apparently cannot raise Switch approval cards, which belong to Console-run agents such as Claude Code. For the scripted agents, the gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing policy. Real approval cards appear only in the recorded run, where Alice is real Claude Code.
+1. **Owner-only approval: verified in code, needs one live test.** Switch's addressing gate covers approval answers as well as commands (Switch core `session_activity/service.py:483-485`, refusal at `:599-603`). An `[Allow]` press is mapped to the clicker's identity (`collaboration_core.py:1886-1907`, `bridge_answers.py:187-210`). Run the Step 5 demo before the demo depends on it. If it fails, the Bailiff pre-check is enforced by our code, never by Switch. Finding (Nov 6, unverified end to end): custom Python agents apparently cannot raise Switch approval cards, which belong to Console-run agents such as Claude Code. For the scripted agents, the gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing policy. Real approval cards appear only in the recorded run, where Alice is real Claude Code.
 2. **The main story is a Node-version bug in both the judge path and the recorded run.** The culprit is `toSorted()` (UNVERIFIED until run). The case-only import is an optional 10-second bonus clip on the Mac. Reproducing it in the judge path needs the privileged case-insensitive mount, which is untested on Linux, macOS and WSL2 Docker Desktop. If that mount fails, nothing in the main story is lost.
 3. **Addressing policy and the ping TTL catch new agents out.**
    - A newly registered agent answers only its owner until an addressing policy is set. Test with a second agent before the demo.
