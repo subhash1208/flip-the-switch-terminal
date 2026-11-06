@@ -8,6 +8,6 @@
 
 ## Checklist
 
-- [ ] Base branch is `feature/subhash` (see CONTRIBUTING.md)
+- [ ] Base branch is `main` (see CONTRIBUTING.md)
 - [ ] CI is green on this PR
 - [ ] No secrets, tokens, or real personal data in the diff
