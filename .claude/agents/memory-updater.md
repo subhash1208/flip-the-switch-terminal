@@ -1,8 +1,9 @@
 ---
 name: memory-updater
 description: 'Consolidates durable facts into the knowledge graph. Memory operations only.'
-model: claude-sonnet-5.5
-tools: ['code', 'glob', 'grep', 'knowledge', 'read', 'memory/*', 'sequential-thinking/*']
+model: claude-haiku-5-5
+effort: medium
+tools: Read, Glob, Grep, Edit, Write, mcp__memory, mcp__sequential-thinking
 ---
 
 # ROLE

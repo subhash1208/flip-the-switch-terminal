@@ -220,7 +220,7 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
 
       - name: Lint workflows
-        run: "$RUNNER_TEMP/actionlint"
+        run: '"$RUNNER_TEMP/actionlint"'
 
   ci-ok:
     name: ci-ok

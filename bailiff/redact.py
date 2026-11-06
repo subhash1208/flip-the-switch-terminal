@@ -207,7 +207,7 @@ def _email(match: re.Match[str]) -> str:
 _NAME = r"[^\\/:\"'<>|*?\s\[\]&;,=]"
 _WIN_USER = rf"{_NAME}+(?: {_NAME}+){{0,2}}"
 # A chain (`/Users/a/Users/a/...`) is one match: the lookbehind only guards the first segment, and
-# the tail repeats segments with no lookbehind. Each segment is a separate name, so nothing backtracks.
+# the tail repeats segments with no lookbehind. Each segment is a separate name: no backtracking.
 _WIN_HOME = re.compile(
     rf"(?i)(?<!\w)([a-z]:[\\/]+users[\\/]+)({_WIN_USER})((?:[\\/]+users[\\/]+{_WIN_USER})*)"
 )
@@ -259,20 +259,18 @@ def _placeholder(kind: str, match: re.Match[str]) -> str:
     return f"[redacted:{kind}]"
 
 
-def _mask_user(prefix: str, name: str) -> str:
-    if name.lower() in _SAFE_USER_DIRS:
-        return f"{prefix}{name}"
-    return f"{prefix}[redacted:user]"
+def _mask_home(chain: re.Pattern[str], segment: re.Pattern[str], text: str) -> tuple[str, int]:
+    # One chain is one match, but every segment in it is masked and counted on its own.
+    hits = 0
 
+    def mask(match: re.Match[str]) -> str:
+        nonlocal hits
+        if match.group(2).lower() in _SAFE_USER_DIRS:
+            return match.group(0)
+        hits += 1
+        return f"{match.group(1)}[redacted:user]"
 
-def _win_home(match: re.Match[str]) -> str:
-    tail = _WIN_SEGMENT.sub(lambda m: _mask_user(m.group(1), m.group(2)), match.group(3))
-    return _mask_user(match.group(1), match.group(2)) + tail
-
-
-def _posix_home(match: re.Match[str]) -> str:
-    tail = _POSIX_SEGMENT.sub(lambda m: _mask_user(m.group(1), m.group(2)), match.group(3))
-    return _mask_user(match.group(1), match.group(2)) + tail
+    return chain.sub(lambda m: segment.sub(mask, m.group(0)), text), hits
 
 
 def _identity_value(key: str) -> str:
@@ -371,8 +369,8 @@ _STEPS: tuple[Step, ...] = (
     _mask_assignments,
     *(partial(_sub, token, repl=_mask_all) for token in _TOKENS),
     partial(_sub, _EMAIL, repl=_email),
-    partial(_sub, _WIN_HOME, repl=_win_home),
-    partial(_sub, _POSIX_HOME, repl=_posix_home),
+    partial(_mask_home, _WIN_HOME, _WIN_SEGMENT),
+    partial(_mask_home, _POSIX_HOME, _POSIX_SEGMENT),
     partial(_sub, _IDENTITY_LINE, repl=_identity_line),
     partial(_sub, _IDENTITY_INLINE, repl=_identity_inline),
     partial(_sub, _UNAME_HOST, repl=_uname_host),

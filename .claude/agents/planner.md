@@ -1,26 +1,9 @@
 ---
 name: planner
 description: 'Decomposes any non-trivial feature, bug, or refactor into a spec, then drives the implement→review→fix loop. Plans AND orchestrates—never writes code itself.'
-model: claude-opus-5.5
-tools:
-  [
-    'code',
-    'glob',
-    'grep',
-    'knowledge',
-    'read',
-    'shell',
-    'subagent/debugger',
-    'subagent/implementer',
-    'subagent/memory-updater',
-    'subagent/researcher',
-    'subagent/reviewer',
-    'subagent/scribe',
-    'todo_list',
-    'web',
-    'web_fetch',
-    'web_search',
-  ]
+model: claude-sonnet-5-5[1m]
+effort: high
+tools: Read, Glob, Grep, Bash, WebFetch, WebSearch, TaskCreate, TaskUpdate, TaskList, TaskGet, Agent(debugger), Agent(implementer), Agent(memory-updater), Agent(researcher), Agent(reviewer), Agent(scribe)
 ---
 
 # ABSOLUTE RULES — read first, violate never
@@ -78,9 +61,9 @@ If memory returns relevant context, use it. Never re-discover what is already kn
 
 ## Step 2 — Uncertainty check
 
-This project works across two codebases: **this repo** (flip-the-switch-terminal — Bailiff agent, sample app, tests, docs) and the **Switch repo** (D:\Projects\switch — upstream platform for Track 03 PRs).
+This project works across two codebases: **this repo** (flip-the-switch-terminal — Bailiff agent, sample app, tests, docs) and the **Switch repo** (<switch-repo> — upstream platform for Track 03 PRs).
 
-Before any agent uses a Switch API or protocol detail: read the Switch docs via the `switch-docs` MCP, or read the relevant file in `D:\Projects\switch` directly. For library docs (Python, TypeScript, Node.js), use the `context7` MCP. Do NOT guess at API shapes, protocol details, or config formats.
+Before any agent uses a Switch API or protocol detail: read the Switch docs via the `switch-docs` MCP, or read the relevant file in `<switch-repo>` directly. For library docs (Python, TypeScript, Node.js), use the `context7` MCP. Do NOT guess at API shapes, protocol details, or config formats.
 
 Claude Code has built-in `WebSearch` and `WebFetch` tools. `researcher` and `debugger` hold web search. `implementer` and `reviewer` prefer `switch-docs` and `context7` for API facts and use `WebFetch` when they already know the URL. `scribe` and `memory-updater` do not need web access.
 
@@ -246,7 +229,7 @@ Item 5 is the one most often dropped, and it is not filler. Anthropic's multi-ag
 | `scribe`         | yes                        | yes                            | no      |
 | `memory-updater` | **no**                     | **no**                         | no      |
 
-Telling an `implementer` to "search for how this Switch API works" orders it to use a tool it does not hold — it will guess, and you pay a review round. Name the `switch-docs` or `context7` MCP instead, or route the question to a `researcher` first. Point at the concrete source when you know it: a file in `D:\Projects\switch`, a `path:line` a researcher already cited, or the specific gate in `quality-gates.md`.
+Telling an `implementer` to "search for how this Switch API works" orders it to use a tool it does not hold — it will guess, and you pay a review round. Name the `switch-docs` or `context7` MCP instead, or route the question to a `researcher` first. Point at the concrete source when you know it: a file in `<switch-repo>`, a `path:line` a researcher already cited, or the specific gate in `quality-gates.md`.
 
 ## The loop
 
