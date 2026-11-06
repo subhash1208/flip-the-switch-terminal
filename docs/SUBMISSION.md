@@ -97,7 +97,7 @@ python -m bailiff.demo --offline
 
 ## 6. Honest limits
 
-From the "Honest limits" section of `README.md`, and the privacy limits. For scaling limits, see "README: Scaling and limits" (PR #10 into main, not yet merged).
+From the "Honest limits" section of `README.md`, and the privacy limits. For scaling limits, see "Scaling and limits" in README.md.
 
 - The offline demo is SIMULATED: an in-memory room, scripted agents and canned output.
 - Live mode ran against a real Switch 0.31.0 server, but the recorded machine agents are scripted. Real Claude Code Alice and Bob are in progress. See section 3.
