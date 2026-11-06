@@ -45,7 +45,7 @@ The courtroom names are garnish. The substance is the receipt.
 
 ## The Three Agents
 
-The recorded run and the judge path differ in who runs each agent. In the recorded video run, Alice is real Claude Code on a Mac (Santhan's), and Bob is the scripted agent in a `node:18` Linux container on the same Mac. The judge path is fully scripted and keyless: Alice and Bob are both scripted containers, and no model key is needed.
+The recorded run and the judge path differ in who runs each agent. In the recorded video run, Alice is real Claude Code on a Mac (Santhan's), and Bob is the scripted agent in a `node:18` Linux container on the same Mac. The judge path is fully scripted and keyless: Alice and Bob are both scripted containers, and no model key is needed. The Bailiff is the arbiter in both. `@alice-claude` and `@bob-codex` are handles only: the names the code and Switch use for each connection. They do not say which tool runs the agent.
 
 ### Agent 1: `@alice-claude` (Role: `baseline-counsel`)
 
@@ -53,9 +53,9 @@ The recorded run and the judge path differ in who runs each agent. In the record
 - **What it does:** Fingerprints its machine (OS, Node version, filesystem case behaviour, `git config core.ignorecase`, lockfile hashes). Writes the code fix. Optionally pushes the fix branch.
 - **Who controls it:** Only Alice can approve probes on her machine. Switch refuses commands from anyone else (see Step 5).
 
-### Agent 2: `@bob-codex` (Role: `forensic-prosecutor`)
+### Agent 2: Bob, a scripted machine agent in the judge path (handle `@bob-codex`, Role: `forensic-prosecutor`)
 
-- **What it is:** The scripted Bob agent on Bob's failing machine. In the recorded run, that is a `node:18` Linux container on Santhan's Mac. In the judge path, it is the Bob container (`node:18-bookworm-slim`, Debian bookworm). It connects to Switch over SSH through the remote-host controller, under its own connection id.
+- **What it is:** The scripted Bob agent on Bob's failing machine. In the recorded run, that is a `node:18` Linux container on Santhan's Mac. In the judge path, it is the Bob container (`node:18-bookworm-slim`, Debian bookworm). It is planned to connect to Switch through the remote-host controller, under its own connection id. SSH is not yet set up.
 - **What it does:** Fingerprints the Linux environment. Runs the one ablation on the failing machine. Re-runs the failing test there after Alice's fix lands.
 - **Who controls it:** Only Bob can approve probes on his machine.
 
@@ -100,7 +100,7 @@ Here's what a ParityCourt trial looks like, step by step:
 
 ### Step 1 — Opening the Case
 
-Bob reports: "@bailiff Open Case #101: The `export-service` auth middleware passes on Alice's Mac but throws a 500 `AuthVerifierError` on my Ubuntu 24.04 staging box."
+Bob reports: "@bailiff Open Case #101: The `export-service` auth middleware passes on Alice's Mac but throws a 500 `AuthVerifierError` on my Linux staging container."
 
 The Bailiff creates the room document **Case #101 Evidence Ledger** and summons both agents by role.
 
@@ -126,18 +126,17 @@ The Bailiff posts the clean env diff to Room Documents as `env-diff-case-101` an
 |---------|---------------|-------------|---------|
 | A — Timezone/Locale | `TZ=Asia/Kolkata` | `TZ=UTC` | Decoy |
 | B — Stale Shell Flag | Not set | `NODE_OPTIONS=--openssl-legacy-provider` | Decoy |
-| C — Node Major Version (judge path) | `node:22-bookworm-slim` | `node:18-bookworm-slim` | **Culprit** |
+| C — Node Major Version | Node 22 (`node:22-bookworm-slim` in the judge path; real Mac in the recorded run) | Node 18 (`node:18-bookworm-slim` in the judge path; `node:18` container in the recorded run) | **Culprit** |
 
-This table shows the judge-path bug. In the recorded real-Mac run, row C is filesystem case (APFS vs ext4) and that is the culprit there; see The Sample App.
+The same culprit appears in both runs: Node 18 fails, Node 22 passes. Decoys A and B are planted in both runs. The case-only import is a separate, optional bonus clip; see The Sample App.
 
 ### Step 4 — One Ablation on the Failing Machine
 
-The Bailiff asks `@bob-codex` to change one variable on the failing box. On the judge path, that variable is the Node major: Bob's agent runs the failing test under Node 22 instead of Node 18. In the recorded real-Mac run, it is how the import resolves the file name: Bob's agent adds a symlink named `SqlAuthGuard.ts` that points at `sqlAuthGuard.ts`, then starts the app again.
+The Bailiff asks `@bob-codex` to change one variable on the failing box: the Node major. Bob's agent runs the failing test under Node 22 instead of Node 18. This step is the same in the recorded run and the judge path.
 
-- Ablation (judge path): failing test run under Node 22 → passes (outcome: pass)
-- Ablation (recorded run): one case-matching symlink for the import → App boots (outcome: pass)
+- Ablation: failing test run under Node 22 → passes (outcome: pass)
 
-Root cause (judge path): `toSorted()` is not a function on Node 18, so the auth path throws. Root cause (recorded run): the import `from './security/SqlAuthGuard'` resolves on a case-insensitive filesystem but not on a case-sensitive one, where the file is `security/sqlAuthGuard.ts`.
+Root cause: `toSorted()` is not a function on Node 18, so the auth path throws.
 
 The env diff rules out the decoys. If time allows, one ablation each clears them too. Every step goes into the receipt.
 
@@ -162,7 +161,7 @@ If the live test fails, the fallback is a Bailiff pre-check that refuses answers
 
 ### Step 6 — Fix and Verification on the Failing Machine
 
-`@alice-claude` writes the fix: the import is corrected to match the file on disk. It may also add a check that blocks case-mismatched imports. Both changes go on branch `fix/case-101-import`.
+`@alice-claude` writes the fix: the auth path no longer calls `toSorted()`, or the project pins a Node version that provides it. The change goes on branch `fix/node-101-tosorted`.
 
 `@bob-codex` re-runs the failing test on Bob's machine. The fix counts as verified only when the test passes where it failed, not on Alice's Mac.
 
@@ -179,7 +178,7 @@ Each owner signs for the result on their own machine. Neither can attest for the
 
 The Bailiff posts the verdict to the room and saves `receipt.json`:
 
-> **VERDICT #101** (recorded real-Mac run; the judge-path verdict names the Node major instead): Culprit: import filename case mismatch (`SqlAuthGuard` vs `sqlAuthGuard.ts`). One ablation shows the cause. The fix is verified on the failing machine. Both owners attested on their own machines.
+> **VERDICT #101**: Culprit: Node major version (`toSorted()` throws on Node 18; Node 22 passes). The decoys (`TZ`, `NODE_OPTIONS`) are ruled out. One ablation shows the cause. The fix is verified on the failing machine. Both owners attested on their own machines.
 
 Each receipt step records the variable, its value, the outcome, and what was pinned (commit, Node version, mount type). The `replay` command re-runs every step and prints the same outcomes. That is the proof anyone can repeat.
 
@@ -189,26 +188,26 @@ Each receipt step records the variable, its value, the outcome, and what was pin
 
 ## The Sample App (Planted Bugs)
 
-A small Node.js `export-service` with auth middleware. Its git history is real: an earlier commit renamed `SqlAuthGuard.ts` to `sqlAuthGuard.ts` by case alone. A case-insensitive filesystem accepts that rename silently, so the slip is realistic. That history drives the recorded real-Mac run, not the judge path.
+A small Node.js `export-service` with auth middleware. It has one culprit and two decoys, and the same culprit drives both the recorded run and the judge path.
 
-The app has one culprit per path and two decoys.
+The git history is real: an earlier commit renamed `SqlAuthGuard.ts` to `sqlAuthGuard.ts` by case alone. A case-insensitive filesystem accepts that rename silently. That history drives only the optional case-only bonus clip, not the main story.
 
-### Judge-path culprit (primary): Node-version-dependent API
+### Culprit: Node-version-dependent API
 
 - The auth path calls `Array.prototype.toSorted()`. The method landed in Node 20 (UNVERIFIED: not yet confirmed against the Node changelog; confirm by running).
-- Alice's container (`node:22-bookworm-slim`) runs it, and the test passes.
-- Bob's container (`node:18-bookworm-slim`) throws a TypeError, so the auth path fails and the test goes red (UNVERIFIED until run).
+- Alice's side runs it on Node 22 (real Claude Code on the Mac in the recorded run; `node:22-bookworm-slim` container in the judge path), and the test passes.
+- Bob's container (`node:18-bookworm-slim` in the judge path; `node:18` container in the recorded run) throws a TypeError, so the auth path fails and the test goes red (UNVERIFIED until run).
 - Deterministic: both images are pinned by digest in `docker-compose.yml` (UNVERIFIED until that file exists) and stay on glibc. No privileges and no host-specific behaviour.
 
-### Recorded real-Mac run: case-only import mismatch
+### Optional bonus clip: case-only import mismatch (10 seconds, same Mac)
 
 - The file on disk is `security/sqlAuthGuard.ts`; the import is `from './security/SqlAuthGuard'`.
-- On a case-insensitive filesystem (APFS on a real Mac) the import resolves and the app boots. On a case-sensitive one (ext4 on Bob's box) it fails.
-- This bug is not in the planned recording, and no real-Mac replay of it is recorded yet (unverified). The judge containers do not reproduce it (see How Judges Reproduce It).
+- `node sample-app/export-service/case-demo/consumer.js` works on a case-insensitive filesystem (APFS on the Mac). The same file fails with `MODULE_NOT_FOUND` inside the Linux container (case-sensitive ext4).
+- This is an analogue, not the culprit, and not part of the main story. It is unverified until recorded. The judge containers do not reproduce it (see How Judges Reproduce It).
 
 ### Fallback (UNVERIFIED): privileged case-insensitive mount
 
-- Would let the judge path reproduce the case bug. Usable only if tested on Linux, macOS and WSL2 Docker Desktop.
+- Would let the judge path reproduce the optional case-only analogue. Not needed for the main story. Usable only if tested on Linux, macOS and WSL2 Docker Desktop.
 - Feasibility is UNVERIFIED: ext4 casefold needs kernel support plus a loop mount, the Docker Desktop VM kernel is unknown, and sources conflict on VirtioFS case behaviour.
 - Until it is tested, the judge path uses the Node-version culprit.
 
@@ -253,14 +252,14 @@ This matters because:
 Judges need Docker. Nothing else: no model key, no Mac, no Linux box, no Slack workspace, no accounts. The judge path is fully scripted and keyless.
 
 1. **Two containers:** an Alice container and a Bob container, built from the pinned Node images in the sketch below (Debian bookworm, not Ubuntu 24.04). Each has its own Switch connection id. Bob's connects through the remote-host controller; the sketch does not set up SSH yet.
-2. **A deterministic difference:** the Node major version (primary; see The Sample App). The difference lives in the containers, so the judge's host OS doesn't change the result.
+2. **A deterministic difference:** the Node major version (see The Sample App). The difference lives in the containers, so the judge's host OS doesn't change the result.
 3. **One command:** `just demo` bootstraps both containers and the Switch stack. (Planned entry point.)
 4. **Chat platform:** the Mattermost that Switch bundles.
 5. **Room template:** hand-written v2 YAML. Switch Console's "Capture as template" strips agent instructions and permissions, so we write it ourselves.
 6. **Auto-approve OFF:** every probe waits for its owner.
 7. **Recorded run:** a recording of the full run and `replay`, for the video and for anyone who can't run Docker.
 
-**The honest story:** The bug is a Node-version-dependent API. The case-only import (macOS APFS vs Linux ext4) is a real-world analogue. The judge containers do not reproduce it, and it is not the culprit in the planned recording.
+**The honest story:** The bug is a Node-version-dependent API, in the recorded run and the judge path alike. The case-only import (macOS APFS vs Linux ext4) is a real-world analogue, shown only as an optional 10-second bonus clip on the same Mac. The judge containers do not reproduce it.
 
 Compose sketch (images to be pinned by digest before the demo; `test.js` is the failing test, so confirm it exists in `export-service`):
 
@@ -296,7 +295,7 @@ For the README:
 
 - **Approval identity is the participant's name, not a signed identity.** An attestation records who said yes. It is not a cryptographic signature.
 - **Probes are allow-listed.** Agents run only the commands on the approved list. They never read `.env` files.
-- **Real vs simulated.** Built and tested offline: the receipt and the replay. Not yet run against a real Switch server: the Switch rooms, agent connections, and owner-scoped addressing (live mode is planned). Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The case-only import is not part of the planned recording, and the judge containers do not reproduce it. The recording shows the full run (planned, not yet recorded).
+- **Real vs simulated.** Built and tested offline: the receipt and the replay. Not yet run against a real Switch server: the Switch rooms, agent connections, and owner-scoped addressing (live mode is planned). Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The recorded run uses real Claude Code for Alice on the Mac and a Node 18 container for Bob. The case-only import is an optional bonus clip that the judge containers do not reproduce. The 80–150 second recording is planned, not yet recorded.
 - **Switch has no built-in loop breaker or dual sign-off.** Any turn cap or two-owner rule is Bailiff code, and the turn cap is optional.
 - **Secret redaction is best effort.** It combines Switch's guardrail with a regex. It is not a guarantee against every secret format.
 - **Verification covers one test.** The fix is verified by re-running the failing test on the failing machine. That is not proof the fix is correct beyond that test.
@@ -383,7 +382,7 @@ ParityCourt is the Track 01 submission. Side entries only if they're cheap:
 ## Risks
 
 1. **Owner-only approval: verified in code, needs one live test.** Switch's addressing gate covers approval answers as well as commands (Switch core `session_activity/service.py:483-485`, refusal at `:599-603`). A `[Allow]` press is mapped to the clicker's identity (`collaboration_core.py:1886-1907`, `bridge_answers.py:187-210`). Run the Step 5 demo before the demo depends on it. If it fails, the Bailiff pre-check is enforced by our code, never by Switch. Finding (Nov 6, unverified end to end): custom Python agents apparently cannot raise Switch approval cards, which belong to Console-run agents such as Claude Code. For the scripted agents, the gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing policy. Real approval cards appear only in the recorded run, where Alice is real Claude Code.
-2. **The judge path reproduces a Node-version bug, not the case bug.** The primary bug is `toSorted()` (UNVERIFIED until run). The case-only import is the recorded real-Mac run. Reproducing it in the judge path needs the privileged vfat mount, which is untested on Linux, macOS and WSL2 Docker Desktop. If that mount fails, the judge path keeps the Node bug.
+2. **The main story is a Node-version bug in both the judge path and the recorded run.** The culprit is `toSorted()` (UNVERIFIED until run). The case-only import is an optional 10-second bonus clip on the Mac. Reproducing it in the judge path needs the privileged case-insensitive mount, which is untested on Linux, macOS and WSL2 Docker Desktop. If that mount fails, nothing in the main story is lost.
 3. **Addressing policy and the ping TTL catch new agents out.**
    - A newly registered agent answers only its owner until an addressing policy is set. Test with a second agent before the demo.
    - Each connection must answer app-level pings within 6 seconds, or Switch evicts it (`heartbeat_lapsed`). The reply is a `pong` carrying the cursor: `{"type":"pong","cursor":N}`. Answer pings before processing events. After a lapse, reopen and resume from your cursor.
@@ -411,6 +410,8 @@ ParityCourt is the Track 01 submission. Side entries only if they're cheap:
 8. **Repo public by ~6 PM IST on Nov 7** (target; Boss decides). The official deadline is 11:59 PM IST on Nov 7. Submit before then to avoid server issues.
 
 9. **The demo video closing line is:** "Delete Switch, and these agents can't see each other's machines."
+
+10. **Demo video length: 80–150 seconds.** Judges favour short videos. The case-only bonus clip is optional and does not count toward the main story.
 
 ---
 
