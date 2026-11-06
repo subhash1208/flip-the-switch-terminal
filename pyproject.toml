@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 dependencies = ["websockets", "httpx"]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "ruff", "mypy", "hypothesis"]
 
 [tool.setuptools]
 packages = ["bailiff", "bailiff.scripted"]
@@ -31,3 +31,12 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+[tool.coverage.run]
+source = ["bailiff"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+exclude_also = ['if __name__ == "__main__":']

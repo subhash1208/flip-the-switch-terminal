@@ -2,8 +2,9 @@
 
 Every participant has its own queue and sees every message (as with filter=all). Documents live in a
 dict and follow the rule that creating an existing name fails. Nothing here touches a network.
-The transcript is stored redacted, as Switch's guardrail stores it. Delivered frames stay
-raw, so the Bailiff's own redaction is what gets counted in the receipt.
+The transcript is stored redacted, as Switch's guardrail stores it, and it also gets the whole-line
+secret rule: a machine's JSON reply would otherwise keep the tail of a secret line. Delivered frames
+stay raw, so the Bailiff's own redaction is what gets counted in the receipt.
 This is NOT Switch: addressing policy and the real operation argument schemas are not modelled.
 """
 
@@ -15,7 +16,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 from bailiff.events import Event, Malformed, parse_event
-from bailiff.redact import redact
+from bailiff.redact import mask_bounded
 from bailiff.transport import OpError
 
 
@@ -33,7 +34,7 @@ class FakeRoom:
 
     def publish(self, sender: str, text: str) -> None:
         self._seq += 1
-        self.messages.append((sender, redact(text)[0]))
+        self.messages.append((sender, mask_bounded(text)[0]))
         frame = json.dumps(
             {
                 "event": "message",
@@ -86,7 +87,7 @@ class FakeConnection:
         return {"result": {"name": doc}}
 
     async def post(self, room_id: str, text: str) -> int:
-        _, hits = redact(text)
+        _, hits = mask_bounded(text)
         self.redactions += hits
         self._room.publish(self._name, text)
         return hits

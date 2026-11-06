@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 import pytest
 
+from bailiff import transport
 from bailiff.transport import (
     OpError,
     ReconnectExhausted,
@@ -97,6 +98,24 @@ def _conn(
         transport=transport,
         **kwargs,
     )
+
+
+@pytest.mark.asyncio
+async def test_the_default_dial_pins_the_one_mib_frame_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    async def connect(url: str, **kwargs: Any) -> str:
+        seen["url"] = url
+        seen.update(kwargs)
+        return "socket"
+
+    monkeypatch.setattr(transport.websockets, "connect", connect)
+    assert await transport._default_dial("ws://h/x", {"A": "1"}) == "socket"
+    assert seen == {
+        "url": "ws://h/x",
+        "additional_headers": {"A": "1"},
+        "max_size": 2**20,
+    }
 
 
 @pytest.mark.asyncio
@@ -209,6 +228,21 @@ async def test_post_sends_the_redacted_content_and_counts_it() -> None:
         hits = await conn.post("r1", "x?a=1&token=abc123")
     assert hits == 1
     assert sent == [{"room_id": "r1", "content": "x?a=1&token=[redacted]"}]
+
+
+@pytest.mark.asyncio
+async def test_an_oversized_post_is_capped_and_says_so() -> None:
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"ok": True})
+
+    async with _conn(FakeDial([]), transport=httpx.MockTransport(handler)) as conn:
+        await conn.post("r1", "x " * 40_000)
+    content: str = sent[0]["content"]
+    assert len(content) < 65_536 + 40
+    assert "[truncated " in content and content.endswith(" chars]")
 
 
 @pytest.mark.asyncio

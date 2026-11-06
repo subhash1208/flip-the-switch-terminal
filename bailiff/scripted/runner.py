@@ -23,10 +23,11 @@ from typing import Any
 from bailiff.agent import Conn
 from bailiff.allowlist import is_allowed, is_allowed_overlay
 from bailiff.events import REQ, RES, Event, read_wire
+from bailiff.redact import SECRET_WORDS
 
 APPROVAL = "APPROVAL: auto-approved (scripted agent, no human)"
 RUN_TIMEOUT_S = 20.0
-_SECRET_ENV = re.compile(r"secret|token|password|api[_-]?key", re.IGNORECASE)
+_SECRET_ENV = re.compile("|".join(SECRET_WORDS), re.IGNORECASE)
 
 Runner = Callable[[list[str], dict[str, str]], Awaitable[dict[str, Any]]]
 

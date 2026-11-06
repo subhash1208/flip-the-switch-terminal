@@ -1,0 +1,22 @@
+# Updates open against the default branch on purpose: hackathon PR rule, the Boss merges them.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /deploy
+    schedule:
+      interval: weekly

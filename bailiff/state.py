@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from bailiff.privacy import privacy_record
+
 ORDER = ("opened", "fingerprinting", "diffing", "ablating", "verifying", "attested", "closed")
 
 
@@ -52,6 +54,7 @@ class CaseState:
     fix: dict[str, Any] | None = None
     attestations: list[dict[str, Any]] = field(default_factory=list)
     verdict: str | None = None
+    transcript: list[tuple[str, str]] = field(default_factory=list)
 
     def transition(self, new: str) -> None:
         """Move one step forward, or to closed from any open state."""
@@ -85,6 +88,9 @@ class CaseState:
         }
         if self.simulated:
             case["simulated"] = True
+        record = privacy_record(self.transcript)
+        if record is not None:
+            case["privacy"] = record
         if self.inconclusive_reason is not None:
             case["inconclusive"] = True
             case["inconclusive_reason"] = self.inconclusive_reason

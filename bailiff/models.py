@@ -9,6 +9,7 @@ class Suspect:
     alice: str
     bob: str
     verdict: str
+    note: str = ""
 
 
 @dataclass(frozen=True)

@@ -11,9 +11,9 @@ def test_a_secret_inside_a_json_envelope_is_masked_without_breaking_the_secret_f
     text = r'{"stdout": "HOME=/Users/alice\nDATABASE_PASSWORD=hunter2-alice\n", "exit_code": 0}'
     out, count = redact(text)
     assert "hunter2" not in out
-    assert "HOME=/Users/alice" in out
+    assert "HOME=/Users/[redacted:user]" in out
     assert '"exit_code": 0}' in out
-    assert count == 1
+    assert count == 2
 
 
 PAIR_CASES = [
@@ -44,7 +44,7 @@ def test_a_secret_joined_to_a_non_secret_value_is_masked(
     assert redact(out) == (out, 0)
 
 
-@pytest.mark.parametrize("text", ["HOME=/Users/alice&LANG=en", '{"stdout": "exit 0"}'])
+@pytest.mark.parametrize("text", ["HOME=/opt/app&LANG=en", '{"stdout": "exit 0"}'])
 def test_pairs_without_a_secret_key_are_left_alone(text: str) -> None:
     assert redact(text) == (text, 0)
 

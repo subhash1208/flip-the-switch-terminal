@@ -2,6 +2,7 @@ import pytest
 
 from bailiff.fingerprint import diff_fingerprints, parse_fingerprint
 from bailiff.models import Suspect
+from bailiff.redact import MARKER
 
 MAC_PROBES = {
     "uname -a": "Darwin alices-mac.local 24.1.0 Darwin Kernel Version 24.1.0 arm64",
@@ -35,7 +36,7 @@ def test_parses_macos_probes_and_redacts_env() -> None:
     assert fp["node_options"] is None
     assert fp["fs_case"] == "case-insensitive"
     assert fp["lock_sha"] == "aaa111"
-    assert fp["env"] == {"HOME": "/Users/alice", "DATABASE_PASSWORD": "[redacted]"}
+    assert fp["env"] == {"HOME": "/Users/[redacted:user]", "DATABASE_PASSWORD": "[redacted]"}
 
 
 def test_parses_linux_probes_as_case_sensitive_ext4() -> None:
@@ -43,6 +44,28 @@ def test_parses_linux_probes_as_case_sensitive_ext4() -> None:
     assert fp["os"] == "Linux"
     assert fp["node_options"] == "--openssl-legacy-provider"
     assert fp["fs_case"] == "case-sensitive"
+
+
+ENV_TAIL_CASES = [
+    "DB_PASSWORD=correct horse battery",
+    "API_TOKEN=abc;def-tail",
+    "MY_SECRET=abc&def-tail",
+    "AUTH_KEY=abc,def-tail",
+    "DB_PASSWORD=it'def-tail",
+]
+
+
+@pytest.mark.parametrize("secret_line", ENV_TAIL_CASES)
+def test_a_secret_value_with_a_separator_leaks_no_tail_into_the_fingerprint(
+    secret_line: str,
+) -> None:
+    probes = {**LINUX_PROBES, "env": f"HOME=/home/bob\n{secret_line}\nTZ=UTC"}
+    key = secret_line.partition("=")[0]
+    assert parse_fingerprint("bob", probes)["env"] == {
+        "HOME": "/home/[redacted:user]",
+        key: MARKER,
+        "TZ": "UTC",
+    }
 
 
 def test_missing_probes_are_tolerated() -> None:
@@ -92,6 +115,12 @@ def test_diff_lists_differing_fields_in_fixed_order() -> None:
     ]
     assert suspects[0] == Suspect("tz", "Asia/Kolkata", "UTC", "unknown")
     assert suspects[-1] == Suspect("lock_sha", "aaa111", "bbb222", "unknown")
+
+
+def test_an_empty_raw_side_is_compared_as_given_not_replaced_by_the_masked_side() -> None:
+    # raw_a is given but empty: it must count as given, so the raw values decide, not `a`.
+    (suspect,) = diff_fingerprints({"node": "v22"}, {"node": "v22"}, {}, {"node": "v22"})
+    assert suspect == Suspect("node", "v22", "v22", "unknown")
 
 
 def test_identical_fingerprints_yield_no_suspects() -> None:

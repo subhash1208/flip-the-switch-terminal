@@ -35,13 +35,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from bailiff.ablation import classify, plan_ablation
+from bailiff.ablation import NOT_ABLATED_MASKED, classify, plan_ablation
 from bailiff.allowlist import is_allowed, is_allowed_overlay
 from bailiff.events import REQ, RES, Event, message_id, read_wire
-from bailiff.fingerprint import diff_fingerprints, parse_fingerprint
+from bailiff.fingerprint import diff_fingerprints, parse_fingerprint, raw_compared
 from bailiff.models import StepResult, Suspect
-from bailiff.receipt import build_receipt, save_receipt, step_to_dict
-from bailiff.redact import redact
+from bailiff.receipt import build_receipt, save_receipt, step_to_dict, validate_receipt
+from bailiff.redact import mask_bounded, mask_secret_lines, redact
 from bailiff.state import CaseState, TurnCapExceeded
 from bailiff.transport import ReconnectExhausted, SwitchConnection, TakenOver
 
@@ -86,10 +86,16 @@ class _Ctx:
     timeout: float
 
 
-async def _pump(conn: Conn, inbox: Inbox) -> None:
-    """Feed events into a queue. Timeouts then never cancel the event generator itself."""
+async def _pump(conn: Conn, inbox: Inbox, transcript: list[tuple[str, str]]) -> None:
+    """Feed events into a queue. Timeouts then never cancel the event generator itself.
+
+    Each message is also kept in the transcript, masked as the room stores it, for the receipt's
+    privacy record.
+    """
     try:
         async for ev in conn.events():
+            if ev.text is not None:
+                transcript.append((ev.sender or "unknown", mask_bounded(ev.text)[0]))
             inbox.put_nowait(ev)
     except Exception as exc:  # e.g. TakenOver: hand it to the flow so it stops
         inbox.put_nowait(exc)
@@ -119,7 +125,13 @@ def _trigger_title(ev: Event) -> str | None:
 
 
 def _suspect_dict(s: Suspect) -> dict[str, Any]:
-    return {"name": s.name, "alice": s.alice, "bob": s.bob, "verdict": s.verdict}
+    return {
+        "name": s.name,
+        "alice": s.alice,
+        "bob": s.bob,
+        "verdict": s.verdict,
+        "note": s.note,
+    }
 
 
 def _code(reply: dict[str, Any] | None) -> int | None:
@@ -221,9 +233,9 @@ async def _probe(ctx: _Ctx, machine: str, name: str, argv: list[str]) -> str | N
     )
     if reply is None:
         return None
-    out, hits = redact(str(reply.get("stdout", "")))
-    ctx.state.redactions += hits
-    return out
+    raw = str(reply.get("stdout", ""))
+    ctx.state.redactions += mask_bounded(raw)[1]
+    return raw
 
 
 async def _run_test(ctx: _Ctx, machine: str) -> dict[str, Any]:
@@ -240,14 +252,23 @@ async def _run_test(ctx: _Ctx, machine: str) -> dict[str, Any]:
     if got is None:
         return record
     code = _code(got[1])
-    excerpt, hits = redact(str(got[1].get("stderr", ""))[-400:])
-    ctx.state.redactions += hits
-    record.update(exit_code=code, outcome="pass" if code == 0 else "fail", stderr_excerpt=excerpt)
+    # Mask the whole stderr before the tail is taken: a tail cut first can start inside a secret
+    # and lose the key that would have masked it.
+    masked, line_hits = mask_secret_lines(str(got[1].get("stderr", "")))
+    text, hits = redact(masked)
+    ctx.state.redactions += line_hits + hits
+    record.update(
+        exit_code=code, outcome="pass" if code == 0 else "fail", stderr_excerpt=text[-400:]
+    )
     return record
 
 
-async def _fingerprint(ctx: _Ctx) -> dict[str, dict[str, Any]]:
+async def _fingerprint(
+    ctx: _Ctx,
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Masked fingerprints for display, and the raw compared values that decide equality."""
     fingerprints: dict[str, dict[str, Any]] = {}
+    raw: dict[str, dict[str, Any]] = {}
     for machine in ctx.machines:
         collected: dict[str, str] = {}
         for name, argv in ctx.probes.items():
@@ -255,13 +276,14 @@ async def _fingerprint(ctx: _Ctx) -> dict[str, dict[str, Any]]:
             if out is not None:
                 collected[" ".join(argv)] = out
         fingerprints[machine] = parse_fingerprint(machine, collected)
+        raw[machine] = raw_compared(collected)
         ctx.state.machines[machine] = {
             "agent_handle": ctx.machines[machine],
             "fingerprint": fingerprints[machine],
         }
     ctx.state.baseline = await _run_test(ctx, "alice")
     ctx.state.failure = await _run_test(ctx, "bob")
-    return fingerprints
+    return fingerprints, raw
 
 
 async def _ablate(ctx: _Ctx, suspects: list[Suspect]) -> dict[str, Any] | None:
@@ -278,10 +300,15 @@ async def _ablate(ctx: _Ctx, suspects: list[Suspect]) -> dict[str, Any] | None:
         results.append(StepResult(id=step.id, exit_code=code, outcome=outcome, matched=True))
     classified = classify(suspects, results)
     ctx.state.suspects = [_suspect_dict(s) for s in classified]
-    return next(
-        (rec for rec, s in zip(ctx.state.steps, classified, strict=True) if s.verdict == "culprit"),
+    culprit_id = next(
+        (
+            f"ablation-{index}"
+            for index, s in enumerate(classified, start=1)
+            if s.verdict == "culprit"
+        ),
         None,
     )
+    return next((rec for rec in ctx.state.steps if rec["id"] == culprit_id), None)
 
 
 async def _verify(ctx: _Ctx, culprit: dict[str, Any] | None) -> None:
@@ -324,9 +351,11 @@ async def _run(ctx: _Ctx) -> dict[str, Any]:
     try:
         await _write_doc(ctx)
         await _advance(ctx, "fingerprinting")
-        fingerprints = await _fingerprint(ctx)
+        fingerprints, raw = await _fingerprint(ctx)
         await _advance(ctx, "diffing")
-        suspects = diff_fingerprints(fingerprints["alice"], fingerprints["bob"])
+        suspects = diff_fingerprints(
+            fingerprints["alice"], fingerprints["bob"], raw["alice"], raw["bob"]
+        )
         s.suspects = [_suspect_dict(x) for x in suspects]
         await _advance(ctx, "ablating")
         culprit = await _ablate(ctx, suspects)
@@ -348,15 +377,26 @@ async def _run(ctx: _Ctx) -> dict[str, Any]:
         s.verdict = f"stopped: {exc}"
         s.inconclusive_reason = f"stopped at the turn cap: {exc}"
     s.malformed = ctx.conn.malformed
-    if not s.steps and s.inconclusive_reason is None:
-        s.inconclusive_reason = "no suspects: the fingerprints show no difference to ablate"
+    ablated = [step for step in s.steps if not step["variable"].endswith(" (no-op)")]
+    if not ablated and s.inconclusive_reason is None:
+        masked = [x["name"] for x in s.suspects if x["note"] == NOT_ABLATED_MASKED]
+        if masked:
+            s.inconclusive_reason = f"not ablated (value masked): {', '.join(masked)}"
+        elif s.suspects:
+            s.inconclusive_reason = "only no-op suspects differ: nothing could be ablated"
+        else:
+            s.inconclusive_reason = "no suspects: the fingerprints show no difference to ablate"
     if s.baseline is None:
         s.baseline = _not_run("alice", ctx.test_cmd)
     if s.failure is None:
         s.failure = _not_run("bob", ctx.test_cmd)
     s.transition("closed")
     await _write_doc(ctx)
-    return build_receipt(s.to_case_dict())
+    case = s.to_case_dict()
+    problems = validate_receipt({**case, "schema_version": 1})
+    if any(p.startswith("receipt.privacy") for p in problems):
+        case.pop("privacy")
+    return build_receipt(case)
 
 
 async def serve(
@@ -372,7 +412,8 @@ async def serve(
 ) -> dict[str, Any]:
     """Wait for a human to open a case, run it, and return the receipt dict."""
     inbox: Inbox = asyncio.Queue()
-    pump = asyncio.create_task(_pump(conn, inbox))
+    transcript: list[tuple[str, str]] = []
+    pump = asyncio.create_task(_pump(conn, inbox, transcript))
     try:
         while True:
             ev = await _next(inbox)
@@ -386,6 +427,7 @@ async def serve(
                 opened_by=ev.sender or "unknown",
                 turn_cap=turn_cap,
                 simulated=simulated,
+                transcript=transcript,
             )
             return await _run(_Ctx(conn, state, inbox, machines, probes, test_cmd, step_timeout))
     finally:
@@ -403,7 +445,7 @@ async def run_case(
 ) -> dict[str, Any]:
     """Run the whole case on an already-opened state. Returns the receipt dict."""
     inbox: Inbox = asyncio.Queue()
-    pump = asyncio.create_task(_pump(conn, inbox))
+    pump = asyncio.create_task(_pump(conn, inbox, state.transcript))
     try:
         return await _run(_Ctx(conn, state, inbox, machines, probes, test_cmd, step_timeout))
     finally:
