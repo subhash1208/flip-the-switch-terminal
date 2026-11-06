@@ -45,15 +45,17 @@ The courtroom names are garnish. The substance is the receipt.
 
 ## The Three Agents
 
+The recorded run and the judge path differ in who runs each agent. In the recorded video run, Alice is real Claude Code on a Mac (Santhan's), and Bob is the scripted agent in a `node:18` Linux container on the same Mac. The judge path is fully scripted and keyless: Alice and Bob are both scripted containers, and no model key is needed.
+
 ### Agent 1: `@alice-claude` (Role: `baseline-counsel`)
 
-- **What it is:** Claude Code on Alice's machine: her macOS host, or the Alice container in the judge path. It connects to Switch under its own connection id.
+- **What it is:** Claude Code on Alice's machine: her macOS host in the recorded run. In the judge path, Alice is the scripted agent in a container, with no model key. Either way, it connects to Switch under its own connection id.
 - **What it does:** Fingerprints its machine (OS, Node version, filesystem case behaviour, `git config core.ignorecase`, lockfile hashes). Writes the code fix. Optionally pushes the fix branch.
 - **Who controls it:** Only Alice can approve probes on her machine. Switch refuses commands from anyone else (see Step 5).
 
 ### Agent 2: `@bob-codex` (Role: `forensic-prosecutor`)
 
-- **What it is:** Codex on Bob's failing machine. In the recorded real-Mac run, that is an Ubuntu 24.04 box reached over SSH. In the judge path, it is the Bob container (`node:18-bookworm-slim`, Debian bookworm). It connects to Switch over SSH through the remote-host controller, under its own connection id.
+- **What it is:** The scripted Bob agent on Bob's failing machine. In the recorded run, that is a `node:18` Linux container on Santhan's Mac. In the judge path, it is the Bob container (`node:18-bookworm-slim`, Debian bookworm). It connects to Switch over SSH through the remote-host controller, under its own connection id.
 - **What it does:** Fingerprints the Linux environment. Runs the one ablation on the failing machine. Re-runs the failing test there after Alice's fix lands.
 - **Who controls it:** Only Bob can approve probes on his machine.
 
@@ -202,7 +204,7 @@ The app has one culprit per path and two decoys.
 
 - The file on disk is `security/sqlAuthGuard.ts`; the import is `from './security/SqlAuthGuard'`.
 - On a case-insensitive filesystem (APFS on a real Mac) the import resolves and the app boots. On a case-sensitive one (ext4 on Bob's box) it fails.
-- We replayed this on a real Mac and recorded it for the video. The judge containers do not reproduce it (see How Judges Reproduce It).
+- This bug is not in the planned recording, and no real-Mac replay of it is recorded yet (unverified). The judge containers do not reproduce it (see How Judges Reproduce It).
 
 ### Fallback (UNVERIFIED): privileged case-insensitive mount
 
@@ -248,7 +250,7 @@ This matters because:
 
 ## How Judges Reproduce It
 
-Judges need Docker and a model key. Nothing else: no Mac, no Linux box, no Slack workspace, no accounts beyond the model key.
+Judges need Docker. Nothing else: no model key, no Mac, no Linux box, no Slack workspace, no accounts. The judge path is fully scripted and keyless.
 
 1. **Two containers:** an Alice container and a Bob container, built from the pinned Node images in the sketch below (Debian bookworm, not Ubuntu 24.04). Each has its own Switch connection id. Bob's connects through the remote-host controller; the sketch does not set up SSH yet.
 2. **A deterministic difference:** the Node major version (primary; see The Sample App). The difference lives in the containers, so the judge's host OS doesn't change the result.
@@ -258,7 +260,7 @@ Judges need Docker and a model key. Nothing else: no Mac, no Linux box, no Slack
 6. **Auto-approve OFF:** every probe waits for its owner.
 7. **Recorded run:** a recording of the full run and `replay`, for the video and for anyone who can't run Docker.
 
-**The honest story:** The bug is a Node-version-dependent API. The case-only import (macOS APFS vs Linux ext4) is the real-world analogue we replayed on a real Mac and recorded for the video, not what the judge container reproduces.
+**The honest story:** The bug is a Node-version-dependent API. The case-only import (macOS APFS vs Linux ext4) is a real-world analogue. The judge containers do not reproduce it, and it is not the culprit in the planned recording.
 
 Compose sketch (images to be pinned by digest before the demo; `test.js` is the failing test, so confirm it exists in `export-service`):
 
@@ -294,11 +296,43 @@ For the README:
 
 - **Approval identity is the participant's name, not a signed identity.** An attestation records who said yes. It is not a cryptographic signature.
 - **Probes are allow-listed.** Agents run only the commands on the approved list. They never read `.env` files.
-- **Real vs simulated.** Real: the Switch rooms, agent connections, owner-scoped addressing, the receipt, and the replay. Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The case-only import was replayed on a real Mac and is in the recording; the judge containers do not reproduce it. The recording shows the full run.
+- **Real vs simulated.** Built and tested offline: the receipt and the replay. Not yet run against a real Switch server: the Switch rooms, agent connections, and owner-scoped addressing (live mode is planned). Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The case-only import is not part of the planned recording, and the judge containers do not reproduce it. The recording shows the full run (planned, not yet recorded).
 - **Switch has no built-in loop breaker or dual sign-off.** Any turn cap or two-owner rule is Bailiff code, and the turn cap is optional.
 - **Secret redaction is best effort.** It combines Switch's guardrail with a regex. It is not a guarantee against every secret format.
 - **Verification covers one test.** The fix is verified by re-running the failing test on the failing machine. That is not proof the fix is correct beyond that test.
 - **Owner-only approval is verified in code, not yet live-tested.** See Risks.
+- **Custom agents apparently cannot raise Switch approval cards (unverified).** Those cards belong to Console-run agents such as Claude Code. The scripted agents' owner gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing policy. Real approval cards appear only in the recorded run, where Alice is real Claude Code. See Risks.
+
+---
+
+## Privacy
+
+The Bailiff masks personal data as well as secrets. Masking happens before anything is posted to the room, or written to the case file or `receipt.json`. Each masked value is replaced with a typed placeholder, for example `[redacted:email]`.
+
+| Data | Status |
+|------|--------|
+| Secrets in env dumps (regex; best effort, see Honest Limits) | Done |
+| Emails, usernames, hostnames, IP addresses, home directory paths, phone numbers | Planned, not yet built |
+| Card numbers, matched only when they pass the Luhn check | Planned, not yet built |
+
+Masking is pattern-based, not name detection. Under the planned design, a person's name in free text is not masked unless it matches a pattern. (Planned, not yet built.)
+
+---
+
+## Quality
+
+| Check | Status |
+|-------|--------|
+| ruff | Done: clean |
+| mypy, strict | Done: clean |
+| pytest, 132 tests | Done: all pass (on Subhash's PC) |
+| Coverage gate at 90% | Planned, not yet built. Current coverage (unverified). |
+| hypothesis property tests (redact, parsers) | Planned, not yet built |
+| Mutation tests on pure modules (cosmic-ray, 1 h box) | Planned, not yet built |
+| bandit, pip-audit, gitleaks | Planned, not yet built |
+| CI workflow running the checks above, plus a Node test job, a Docker judge-path job, actionlint, pre-commit, and Dependabot | Planned, not yet built |
+
+Once the CI workflow exists, it is the authority for what runs.
 
 ---
 
@@ -310,11 +344,11 @@ For the README:
 | Switch Core | Self-hosted via Docker (version not asserted here) |
 | Switch Trust CLI | Optional bonus only: `scan` (OpenGrep code analysis) and `eval` (scores a running HTTP agent 0–100%; needs an LLM key). Not in the main plot. |
 | Chat Platform | Mattermost (bundled with Switch) |
-| Agent 1 | Claude Code (Alice's macOS host or the Alice container) |
-| Agent 2 | Codex (judge path: Bob's container, `node:18-bookworm-slim`; recorded run: Ubuntu 24.04 box over SSH) |
+| Agent 1 | Claude Code on Alice's macOS host (recorded run); scripted agent in a container, no model key (judge path) |
+| Agent 2 | Scripted Bob agent (judge path: `node:18-bookworm-slim` container; recorded run: `node:18` Linux container on Santhan's Mac) |
 | Agent 3 (Bailiff) | Custom Python, WebSocket/HTTP protocol |
 | Sample App | Node.js `export-service` with auth middleware |
-| Tests | pytest for the Bailiff (target) |
+| Tests | pytest for the Bailiff: 132 tests pass (on Subhash's PC). CI and coverage gate planned. |
 | Room Template | Hand-written v2 YAML |
 | Setup | `just demo` (planned) |
 
@@ -348,7 +382,7 @@ ParityCourt is the Track 01 submission. Side entries only if they're cheap:
 
 ## Risks
 
-1. **Owner-only approval: verified in code, needs one live test.** Switch's addressing gate covers approval answers as well as commands (Switch core `session_activity/service.py:483-485`, refusal at `:599-603`). A `[Allow]` press is mapped to the clicker's identity (`collaboration_core.py:1886-1907`, `bridge_answers.py:187-210`). Run the Step 5 demo before the demo depends on it. If it fails, the Bailiff pre-check is enforced by our code, never by Switch.
+1. **Owner-only approval: verified in code, needs one live test.** Switch's addressing gate covers approval answers as well as commands (Switch core `session_activity/service.py:483-485`, refusal at `:599-603`). A `[Allow]` press is mapped to the clicker's identity (`collaboration_core.py:1886-1907`, `bridge_answers.py:187-210`). Run the Step 5 demo before the demo depends on it. If it fails, the Bailiff pre-check is enforced by our code, never by Switch. Finding (Nov 6, unverified end to end): custom Python agents apparently cannot raise Switch approval cards, which belong to Console-run agents such as Claude Code. For the scripted agents, the gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing policy. Real approval cards appear only in the recorded run, where Alice is real Claude Code.
 2. **The judge path reproduces a Node-version bug, not the case bug.** The primary bug is `toSorted()` (UNVERIFIED until run). The case-only import is the recorded real-Mac run. Reproducing it in the judge path needs the privileged vfat mount, which is untested on Linux, macOS and WSL2 Docker Desktop. If that mount fails, the judge path keeps the Node bug.
 3. **Addressing policy and the ping TTL catch new agents out.**
    - A newly registered agent answers only its owner until an addressing policy is set. Test with a second agent before the demo.
@@ -374,7 +408,7 @@ ParityCourt is the Track 01 submission. Side entries only if they're cheap:
 
 7. **Switch Trust is an optional bonus, not the main plot.** Don't let it displace the must-have slice.
 
-8. **Submit by ~6 PM IST on Nov 7** — 5+ hours before the 11:59 PM deadline to avoid server issues.
+8. **Repo public by ~6 PM IST on Nov 7** (target; Boss decides). The official deadline is 11:59 PM IST on Nov 7. Submit before then to avoid server issues.
 
 9. **The demo video closing line is:** "Delete Switch, and these agents can't see each other's machines."
 

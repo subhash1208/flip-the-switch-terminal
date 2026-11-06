@@ -18,3 +18,11 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+# ParityCourt generated artifacts
+receipt.json
+paritycourt.egg-info/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

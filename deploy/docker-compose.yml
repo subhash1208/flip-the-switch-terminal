@@ -1,0 +1,25 @@
+services:
+  alice:
+    build:
+      context: .
+      dockerfile: Dockerfile.alice
+    container_name: paritycourt-alice
+    restart: "no"
+    environment:
+      TZ: Asia/Kolkata
+    volumes:
+      - ../sample-app/export-service:/app:ro
+    command: ["node", "test.js"]
+
+  bob:
+    build:
+      context: .
+      dockerfile: Dockerfile.bob
+    container_name: paritycourt-bob
+    restart: "no"
+    environment:
+      TZ: UTC
+      NODE_OPTIONS: --openssl-legacy-provider
+    volumes:
+      - ../sample-app/export-service:/app:ro
+    command: ["node", "test.js"]
