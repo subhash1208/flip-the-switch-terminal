@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Stop Guard — Evidence + No-Pause Rules",
+      "trigger": "Stop",
+      "description": "Emits standing evidence and no-pause rules when the agent finishes, so it can self-check before handing off.",
+      "action": {
+        "type": "command",
+        "command": "python \".kiro/hooks/scripts/stop_guard.py\" 2>nul || python3 \".kiro/hooks/scripts/stop_guard.py\"",
+        "timeout": 30
+      }
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Agentic Standing Rules",
+      "trigger": "UserPromptSubmit",
+      "description": "Enforces evidence rule (verbatim gate output required), no-pause rule, and reviewer verdict well-formedness on every prompt.",
+      "action": {
+        "type": "agent",
+        "prompt": "STANDING RULES — self-check before you consider a turn complete:\n\n== PART A: evidence for gate claims ==\n\n1. Every quality gate you claimed to have passed has that gate's verbatim command output present in the transcript.\n2. Any gate left red, or any command that failed, was stated plainly.\n3. No test was skipped, deleted, or loosened to get green; --no-verify was not used.\n4. Any piped command whose success was asserted was judged by PIPESTATUS[0], not $?.\n\nESCAPE: a turn that made no quality-gate claims satisfies PART A automatically.\n\n== PART B: the work was carried as far as it could go ==\n\nSatisfied when EITHER holds:\n\n6a. The turn did not end by asking the user for permission to continue work they already asked for.\n\nOR\n\n6b. The turn ended with a question, and the reason is sanctioned: missing credentials; destructive action; git push; genuinely ambiguous requirements; review round 5 cap; or the user's own instruction to stop.\n\n\"I have finished step one, shall I proceed to step two?\" on already-requested work does NOT satisfy Part B.\n\n== REVIEWER VERDICT ==\n\nIf you are a reviewer subagent: your report MUST contain VERDICT: GREEN or VERDICT: RED. If GREEN, verbatim gate output for each gate claimed. If RED, at least one finding naming a concrete failure (input → wrong output). Opinions never block GREEN."
+      }
+    }
+  ]
+}

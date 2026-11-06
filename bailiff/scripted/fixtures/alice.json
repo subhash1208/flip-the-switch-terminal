@@ -1,0 +1,16 @@
+{
+  "machine": "alice",
+  "description": "Fixture: macOS-like host (Darwin arm64), Node 22. Decoy values: TZ and NODE_OPTIONS. Synthetic secret only.",
+  "commands": {
+    "uname -a": {"exit_code": 0, "stdout": "Darwin alice-mac 24.5.0 Darwin Kernel Version 24.5.0 arm64\n"},
+    "node -v": {"exit_code": 0, "stdout": "v22.11.0\n"},
+    "env": {
+      "exit_code": 0,
+      "stdout": "HOME=/Users/alice\nPATH=/usr/local/bin:/usr/bin:/bin\nTZ=Europe/London\nNODE_OPTIONS=--max-old-space-size=4096\nDATABASE_PASSWORD=hunter2-alice\n"
+    },
+    "git config core.ignorecase": {"exit_code": 0, "stdout": "true\n"},
+    "printenv TZ": {"exit_code": 0, "stdout": "Europe/London\n"},
+    "printenv NODE_OPTIONS": {"exit_code": 0, "stdout": "--max-old-space-size=4096\n"},
+    "node test.js": {"exit_code": 0, "stdout": "auth: 4 passed\n"}
+  }
+}

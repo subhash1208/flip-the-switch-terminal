@@ -1,6 +1,6 @@
 ---
 description: Produce a polished tutorial video of this project's web app (browser recording, synced voice-over, burned-in subtitles, full editing)
-argument-hint: [journeys to film, e.g. "admin" or "onboarding + checkout"]
+argument-hint: '[journeys to film, e.g. "admin" or "onboarding + checkout"]'
 ---
 
 Produce one or more tutorial videos of this project's application by following the `video-production` skill pipeline from this plugin. User request: "$ARGUMENTS" (if empty: propose a breakdown of the main user journeys).

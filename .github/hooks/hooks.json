@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "python3 .github/hooks/scripts/session_start.py || python .github/hooks/scripts/session_start.py",
+        "powershell": "python .github/hooks/scripts/session_start.py",
+        "timeoutSec": 15
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "python3 .github/hooks/scripts/guardrail.py || python .github/hooks/scripts/guardrail.py",
+        "powershell": "python .github/hooks/scripts/guardrail.py",
+        "timeoutSec": 10
+      },
+      {
+        "type": "command",
+        "bash": "python3 .github/hooks/scripts/foreground_guard.py || python .github/hooks/scripts/foreground_guard.py",
+        "powershell": "python .github/hooks/scripts/foreground_guard.py",
+        "timeoutSec": 10
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "matcher": "edit|create",
+        "bash": "python3 .github/hooks/scripts/gate_reminder.py || python .github/hooks/scripts/gate_reminder.py",
+        "powershell": "python .github/hooks/scripts/gate_reminder.py",
+        "timeoutSec": 10
+      }
+    ],
+    "subagentStop": [
+      {
+        "type": "command",
+        "bash": "python3 .github/hooks/scripts/subagent_stop.py || python .github/hooks/scripts/subagent_stop.py",
+        "powershell": "python .github/hooks/scripts/subagent_stop.py",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

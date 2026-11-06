@@ -1,5 +1,5 @@
 {
-  "description": "Memory lifecycle hooks (read at start, consolidate at stop) + slide generation validation hooks for slides-ai-plugin",
+  "description": "Full hook suite: memory lifecycle, quality gates, security guardrail, standing rules, slides validation",
   "hooks": {
     "SessionStart": [
       {
@@ -12,13 +12,46 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/date_context.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/date_context.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Read|Edit|Write|MultiEdit|NotebookEdit|NotebookRead",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/kiro-guardrail.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/kiro-guardrail.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/gate_reminder.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/gate_reminder.py\"",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit",
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "Check if the file just written is a .pptx or .html presentation file. If it is a .pptx file, verify: (1) the generation script included h.validateDeck() before saving, (2) speaker notes are mentioned in the script. If it is an .html file, verify: (1) it includes viewport-fitting CSS (100vh/100dvh), (2) it includes prefers-reduced-motion support, (3) font sizes use clamp() not fixed values. If the file is not a presentation, return 'approve' immediately. Return 'approve' if checks pass, or a systemMessage with specific issues found.",
+            "prompt": "Check if the file just written is a .pptx or .html presentation file. If it is a .pptx file, verify: (1) the generation script included h.validateDeck() before saving, (2) speaker notes are mentioned in the script. If it is an .html file, verify: (1) it includes viewport-fitting CSS (100vh/100dvh), (2) it includes prefers-reduced-motion support, (3) font sizes use clamp() not fixed values. If the file is not a presentation, return 'approve' immediately.",
             "timeout": 20
           }
         ]
@@ -29,8 +62,8 @@
         "matcher": "*",
         "hooks": [
           {
-            "type": "prompt",
-            "prompt": "RETROSPECTIVE: Before closing out, do a quick self-reflection on what just happened this session.\n\n1. What was accomplished? Summarize in 1-2 sentences.\n\n2. Did this session produce a DURABLE fact — something a future session would pay to rediscover? That means one of:\n   - a root cause or a recurring bug class (the lesson, not a single incident)\n   - an architectural or tooling decision and its rationale\n   - a non-obvious Switch / switch-trust / protocol constraint discovered the hard way\n   - a correction to something the docs or the graph currently get wrong\n   - the user explicitly asked you to remember something\n\n3. If YES, delegate to the memory-updater agent. Hand it a cold-start packet: the goal, the specific durable facts (with any version/path/command quoted exactly), and what NOT to touch. The memory-updater is the ONLY writer to the knowledge graph — do not write to memory yourself, and do not call read_graph.\n\n4. If NO, skip silently. Routine work produces no durable fact: a doc tweak, a config change, a small fix the error message already explained, a file read, an edit following an existing pattern. Writing nothing is the correct, common outcome.\n\nRespect git-safety: this retrospective never commits, pushes, or branches. Keep it brief.",
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/stop_guard.py\" || python \"$CLAUDE_PROJECT_DIR/.claude/hooks/scripts/stop_guard.py\"",
             "timeout": 30
           }
         ]
@@ -40,8 +73,30 @@
         "hooks": [
           {
             "type": "prompt",
-            "prompt": "If the current task involved creating slides or a presentation, verify before stopping: (1) output files were generated (.pptx and/or .html), (2) speaker notes are present on content slides, (3) the user was shown the output file path. If the task was not slide-related, approve immediately. Return 'approve' to stop or 'block' with reason if slides were requested but not fully delivered.",
+            "prompt": "RETROSPECTIVE: Before closing out, do a quick self-reflection on what just happened this session.\n\n1. What was accomplished? Summarize in 1-2 sentences.\n2. Did this session produce a DURABLE fact? If YES, delegate to memory-updater. If NO, skip silently.\nRespect git-safety: this retrospective never commits, pushes, or branches.",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "If the current task involved creating slides or a presentation, verify before stopping: (1) output files were generated (.pptx and/or .html), (2) speaker notes are present on content slides, (3) the user was shown the output file path. If the task was not slide-related, approve immediately.",
             "timeout": 15
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "reviewer",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Either the stopping subagent is not the reviewer, or its report is well-formed. For the reviewer: MUST contain VERDICT: GREEN or VERDICT: RED. If GREEN, verbatim gate output required. If RED, at least one concrete failure (input to wrong output). Opinions never block GREEN. A clean diff returning GREEN on round 1 is correct.",
+            "timeout": 30
           }
         ]
       }
