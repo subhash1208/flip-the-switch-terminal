@@ -65,7 +65,7 @@ The recorded run and the judge path differ in who runs each agent. In the record
 - **What it does:**
   - Opens and closes cases, and keeps the case file as a room document
   - Subscribes with `filter=all`, so it sees every room message, not only mentions
-  - Redacts secret-looking values from env dumps with a simple regex before anything is posted
+  - Masks secrets and personal data (regex and checksum) before anything is posted
   - Writes `receipt.json` and provides the `replay` command
   - Optionally caps agent-to-agent turns at 6. Switch has no built-in loop breaker, so this is Bailiff code.
 - **Who controls it:** Orchestrates the case. It holds no approval power of its own; only owners approve.
@@ -197,7 +197,7 @@ The git history is real: an earlier commit renamed `SqlAuthGuard.ts` to `sqlAuth
 - The auth path calls `Array.prototype.toSorted()`. The method landed in Node 20 (UNVERIFIED: not yet confirmed against the Node changelog; confirm by running).
 - Alice's side runs it on Node 22 (real Claude Code on the Mac in the recorded run; `node:22-bookworm-slim` container in the judge path), and the test passes.
 - Bob's container (`node:18-bookworm-slim` in the judge path; `node:18` container in the recorded run) throws a TypeError, so the auth path fails and the test goes red (UNVERIFIED until run).
-- Deterministic: both images are pinned by digest in `docker-compose.yml` (UNVERIFIED until that file exists) and stay on glibc. No privileges and no host-specific behaviour.
+- Deterministic: both images are meant to be pinned by digest in `deploy/docker-compose.yml` (`(to be verified)`) and stay on glibc. No privileges and no host-specific behaviour.
 
 ### Optional bonus clip: case-only import mismatch (10 seconds, same Mac)
 
@@ -232,7 +232,7 @@ The Bailiff is a small Python agent (target: about 250 lines) built on the Switc
 - **Inbound:** a WebSocket from Switch (`/agents/{agent_id}/connection/ws`), subscribed with `filter=all`. SSE is the deprecated fallback for older clients; do not build on it.
 - **Outbound:** HTTP POST actions back to Switch
 - **Case file:** a room document, appended to as the case moves. The Bailiff creates the case-file room document itself, since only the creating agent may edit a room document.
-- **Secret redactor:** a simple regex on env dumps before posting, with Switch's guardrail as the second layer
+- **Secret redactor:** regex and checksum masking of secrets and personal data before posting, with Switch's guardrail as the second layer
 - **Receipt:** writes `receipt.json` and provides `replay`
 - **State machine:** OPEN → FINGERPRINTING → ABLATION → FIX → VERIFY → ATTESTATION → VERDICT
 
@@ -253,7 +253,7 @@ Judges need Docker. Nothing else: no model key, no Mac, no Linux box, no Slack w
 
 1. **Two containers:** an Alice container and a Bob container, built from the pinned Node images in the sketch below (Debian bookworm, not Ubuntu 24.04). Each has its own Switch connection id. Bob's connects through the remote-host controller; the sketch does not set up SSH yet.
 2. **A deterministic difference:** the Node major version (see The Sample App). The difference lives in the containers, so the judge's host OS doesn't change the result.
-3. **One command:** `just demo` bootstraps both containers and the Switch stack. (Planned entry point.)
+3. **One command:** `python scripts/judge.py` runs the offline checks, and its Docker check runs when Docker is on PATH (built; the Docker leg is `(to be verified)`). Bootstrapping both containers and the Switch stack from one command is planned.
 4. **Chat platform:** the Mattermost that Switch bundles.
 5. **Room template:** hand-written v2 YAML. Switch Console's "Capture as template" strips agent instructions and permissions, so we write it ourselves.
 6. **Auto-approve OFF:** every probe waits for its owner.
@@ -285,7 +285,7 @@ services:
     command: node test.js
 ```
 
-Images are pinned by digest in `docker-compose.yml` (digests to be filled in when the compose file exists; UNVERIFIED until then). This document doesn't assert version numbers for Switch or Switch Trust; check them against the running stack.
+The compose file is `deploy/docker-compose.yml`. Digest pinning in it is `(to be verified)`. This document doesn't assert version numbers for Switch or Switch Trust; check them against the running stack.
 
 ---
 
@@ -295,9 +295,11 @@ For the README:
 
 - **Approval identity is the participant's name, not a signed identity.** An attestation records who said yes. It is not a cryptographic signature.
 - **Probes are allow-listed.** Agents run only the commands on the approved list. They never read `.env` files.
-- **Real vs simulated.** Built and tested offline: the receipt and the replay. Not yet run against a real Switch server: the Switch rooms, agent connections, and owner-scoped addressing (live mode is planned). Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The recorded run uses real Claude Code for Alice on the Mac and a Node 18 container for Bob. The case-only import is an optional bonus clip that the judge containers do not reproduce. The 80–150 second recording is planned, not yet recorded.
+- **Real vs simulated.** Built and tested offline: the receipt, the replay, the redactor and the in-memory room. Not yet run against a real Switch server: the Switch rooms, agent connections, and owner-scoped addressing (live mode is planned). Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The recorded run uses real Claude Code for Alice on the Mac and a Node 18 container for Bob. The case-only import is an optional bonus clip that the judge containers do not reproduce. The 80–150 second recording is planned, not yet recorded.
 - **Switch has no built-in loop breaker or dual sign-off.** Any turn cap or two-owner rule is Bailiff code, and the turn cap is optional.
-- **Secret redaction is best effort.** It combines Switch's guardrail with a regex. It is not a guarantee against every secret format.
+- **Masking is regex and checksum, for secrets and personal data.** It is not a guarantee against every format, and whether Switch's guardrail masks real agent replies is unverified. The masking limits are listed under Privacy in the README.
+- **Masked suspects are not ablated.** A suspect whose value contains a placeholder gets verdict `unknown` (`not ablated: value masked`).
+- **No ablation, no verdict.** If nothing could be ablated, the receipt is INCONCLUSIVE.
 - **Verification covers one test.** The fix is verified by re-running the failing test on the failing machine. That is not proof the fix is correct beyond that test.
 - **Owner-only approval is verified in code, not yet live-tested.** See Risks.
 - **Custom agents apparently cannot raise Switch approval cards (unverified).** Those cards belong to Console-run agents such as Claude Code. The scripted agents' owner gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing policy. Real approval cards appear only in the recorded run, where Alice is real Claude Code. See Risks.
@@ -310,11 +312,14 @@ The Bailiff masks personal data as well as secrets. Masking happens before anyth
 
 | Data | Status |
 |------|--------|
-| Secrets in env dumps (regex; best effort, see Honest Limits) | Done |
-| Emails, usernames, hostnames, IP addresses, home directory paths, phone numbers | Planned, not yet built |
-| Card numbers, matched only when they pass the Luhn check | Planned, not yet built |
+| Secrets (secret-named keys, tokens, Bearer, AWS/GitHub keys, JWTs, URL credentials, auth headers, password flags) become `[redacted]` | Built, offline, tested |
+| Personal data becomes typed placeholders: `[redacted:email]`, `[redacted:ip]`, `[redacted:mac]`, `[redacted:card]` (Luhn-valid only), `[redacted:ssn]`, `[redacted:phone]` (E.164 only), `[redacted:id]`, `[redacted:user]`, `[redacted:host]` | Built, offline, tested |
+| Receipt `privacy` block: placeholder counts and one masked example | Built |
+| Names and street addresses in free text, non-Latin scripts, base64-embedded PII | Not masked (known limit) |
 
-Masking is pattern-based, not name detection. Under the planned design, a person's name in free text is not masked unless it matches a pattern. (Planned, not yet built.)
+Masking is pattern-based and checksum-based, not name detection. A person's name in free text is not masked unless it matches a pattern. The full masking limits are listed under Privacy in the README.
+
+The masking code is `bailiff/redact.py`: deterministic, linear-time, idempotent, never raises, with input capped at 64 KB per message.
 
 ---
 
@@ -322,16 +327,17 @@ Masking is pattern-based, not name detection. Under the planned design, a person
 
 | Check | Status |
 |-------|--------|
-| ruff | Done: clean |
-| mypy, strict | Done: clean |
-| pytest, 132 tests | Done: all pass (on Subhash's PC) |
-| Coverage gate at 90% | Planned, not yet built. Current coverage (unverified). |
-| hypothesis property tests (redact, parsers) | Planned, not yet built |
-| Mutation tests on pure modules (cosmic-ray, 1 h box) | Planned, not yet built |
-| bandit, pip-audit, gitleaks | Planned, not yet built |
-| CI workflow running the checks above, plus a Node test job, a Docker judge-path job, actionlint, pre-commit, and Dependabot | Planned, not yet built |
+| ruff (lint and format) | Done: clean |
+| mypy, strict, over `bailiff/` | Done: clean |
+| pytest | Done: 445 tests pass (author's PC, Python 3.13) |
+| Branch coverage | Done: 94 percent measured. The 90 percent gate is in the CI config, not yet run on GitHub |
+| hypothesis property tests (redact, PII masking) | Done: `tests/test_redact_properties.py`, `tests/test_pii_properties.py` |
+| Mutation tests on pure modules | Planned |
+| Ponytail review | Planned |
+| bandit, pip-audit, gitleaks | Configured in CI; not yet run |
+| CI workflow (lint and types, tests with the 90% gate, Node job, Docker judge path, actionlint, `ci-ok`), plus Dependabot and pre-commit | Written in `.github/workflows/ci.yml`; not yet run on GitHub |
 
-Once the CI workflow exists, it is the authority for what runs.
+`.github/workflows/ci.yml` is the authority for what CI runs. It has not yet run on GitHub.
 
 ---
 
@@ -347,9 +353,9 @@ Once the CI workflow exists, it is the authority for what runs.
 | Agent 2 | Scripted Bob agent (judge path: `node:18-bookworm-slim` container; recorded run: `node:18` Linux container on Santhan's Mac) |
 | Agent 3 (Bailiff) | Custom Python, WebSocket/HTTP protocol |
 | Sample App | Node.js `export-service` with auth middleware |
-| Tests | pytest for the Bailiff: 132 tests pass (on Subhash's PC). CI and coverage gate planned. |
+| Tests | pytest with hypothesis property tests for the Bailiff. Counts in Quality. CI configured, not yet run. |
 | Room Template | Hand-written v2 YAML |
-| Setup | `just demo` (planned) |
+| Setup | `python -m pip install -e .`, then `python scripts/judge.py`. `just demo` runs the offline demo. |
 
 ---
 
@@ -358,7 +364,7 @@ Once the CI workflow exists, it is the authority for what runs.
 | Rubric (weight) | How ParityCourt scores |
 |-----------------|----------------------|
 | **Use of Switch (30%)** | One room per case, one connection id per machine agent, owner-scoped addressing, room documents as the case file, two AI vendors on two machines. Remove Switch and nothing works. |
-| **Technical Execution (25%)** | One-command `just demo` (planned), a two-container judge path with a deterministic bug, a re-runnable receipt with `replay`, pytest coverage for the Bailiff (target). |
+| **Technical Execution (25%)** | One-command `python scripts/judge.py` (built; Docker leg `(to be verified)`), a two-container judge path with a deterministic bug, a re-runnable receipt with `replay`, pytest and property tests for the Bailiff (built; see Quality). |
 | **Creativity & Impact (25%)** | "Works on my machine" becomes evidence: a receipt anyone can replay, with each owner attesting for their own machine. |
 | **Presentation (20%)** | The failed bypass (Bob's command rejected), the owner attestations, `replay` printing the same outcomes, the closing line. |
 

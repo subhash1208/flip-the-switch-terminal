@@ -32,3 +32,11 @@ alice-passes:
 
 judge-check:
     python scripts/check_judge_path.py
+
+judge:
+    python scripts/judge.py
+
+judge-offline:
+    python scripts/judge.py --no-docker
+
+ci: check typecheck test judge-offline

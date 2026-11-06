@@ -53,24 +53,32 @@ What one case run is designed to show. The offline demo simulates steps 3 and 4 
 
 **Prerequisites**
 
-- Python 3.11+ (`requires-python` in [`pyproject.toml`](pyproject.toml))
+- Python 3.11+ (`requires-python` in [`pyproject.toml`](pyproject.toml)). CI runs 3.11 and 3.12. The offline demo was run on Python 3.13 on Windows.
 - [`just`](https://github.com/casey/just). On Windows, `just` needs `sh` on PATH, for example from Git for Windows. Without `just`, use the plain `python` commands; they always work.
 - Docker, only for the container replay and the judge-path check
 
 ```
-python -m pip install -e ".[dev]"    # (to be verified)
-just demo                            # same as: python -m bailiff.demo --offline
+python -m pip install -e .           # the one prerequisite
+python scripts/judge.py              # the one command: 8 checks, ends in JUDGE RESULT
 ```
 
-**Offline demo: SIMULATED.** `just demo` runs the real Bailiff flow against an in-memory room ([`bailiff/scripted/fake_room.py`](bailiff/scripted/fake_room.py)). Alice and Bob are scripted agents that replay canned output from `bailiff/scripted/fixtures/`, so the machine outputs are canned fixtures. No Switch server, no Docker, no LLM key. It prints the room messages, writes `receipt.json` to the current directory, and exits 0. Key lines, abridged:
+`python scripts/judge.py` prints a PASS/FAIL/SKIP table for eight checks. Check 8 runs the live Docker judge path when Docker is on PATH and SKIPs otherwise. `--no-docker` skips it on purpose. The exit code is 1 if any check FAILs.
+
+Alternatives:
 
 ```
-SIMULATED offline demo (scripted agents, in-memory room)
-suspects: tz, node, node_options, os
-culprit:  node (ablation-2)
-fix:      re-run on bob passes
-redactions: 2
-replay: 4/4 steps matched
+python -m bailiff.demo --offline     # the offline demo; same as `just demo`
+python -m pip install -e ".[dev]"    # adds pytest, ruff, mypy and hypothesis for the Quality commands
+```
+
+**Offline demo: SIMULATED.** `just demo` runs the real Bailiff flow against an in-memory room ([`bailiff/scripted/fake_room.py`](bailiff/scripted/fake_room.py)). Alice and Bob are scripted agents that replay canned output from `bailiff/scripted/fixtures/`, so the machine outputs are canned fixtures. No Switch server, no Docker, no LLM key. It prints the room messages, writes `receipt.json` to the current directory, and exits 0. Abridged output follows (room messages and the masked example are left out; `...` marks elided lines):
+
+```
+SIMULATED: in-process fake room, no Switch server
+...
+privacy: masked email=2, host=4, ip=2, secret=2, user=4 (placeholders seen in the room transcript)
+...
+replay: 4/4 steps matched (fixture replay, not Docker)
 ```
 
 `python -m bailiff.demo --live` is not built yet: it prints a TODO and exits 2.
@@ -97,6 +105,42 @@ The live entry point is the Bailiff agent process, `python -m bailiff.agent`.
 
 ---
 
+## Privacy
+
+Nothing personal or secret should reach the room that the LLM agents read. Masking runs on probe output, posted messages, the case-file document and `receipt.json`. Fingerprint comparison runs on raw values in memory only; raw values are never stored or posted.
+
+The masking code is [`bailiff/redact.py`](bailiff/redact.py). It is regex plus checksum, deterministic, linear-time, idempotent, and it never raises. Each message is capped at 64 KB; anything beyond the cap becomes a `[truncated N chars]` marker.
+
+- **Secrets** become `[redacted]`: key=value pairs with secret-named keys, tokens, `Bearer` values, AWS and GitHub keys, JWTs, URL credentials, auth headers, `--password x` flags, and JSON and Python-repr pairs.
+- **Personal data** becomes a typed placeholder:
+
+| Placeholder | Matches |
+|---|---|
+| `[redacted:email]` | email addresses |
+| `[redacted:ip]` | IPv4 and IPv6 addresses |
+| `[redacted:mac]` | MAC addresses |
+| `[redacted:card]` | card numbers that pass the Luhn check |
+| `[redacted:ssn]` | social security numbers |
+| `[redacted:phone]` | phone numbers in E.164 form (leading `+`) only |
+| `[redacted:id]` | long numeric IDs |
+| `[redacted:user]` | usernames in Windows, macOS and Linux home paths, and `USER`, `LOGNAME`, `USERNAME` |
+| `[redacted:host]` | hostnames in `uname -a` output, and `HOSTNAME`, `COMPUTERNAME` |
+
+The receipt has an optional `privacy` block with placeholder counts and one masked example. Demo output reports the same counts.
+
+**Limits of masking** (regex and checksum only):
+
+- No name or street-address detection. Free-text names, non-Latin scripts and base64-embedded PII are not masked.
+- Bare national phone numbers are not masked; only `+` E.164 is.
+- `user@host:path` SSH remotes and dash-style hostnames such as `ip-10-0-1-5` are not masked.
+- Mid-sentence `KEY=value tail words` keeps the tail. Whole-line masking applies to env-style lines in probe stdout.
+- Not masked: PEM bodies on later lines, YAML block scalars, unquoted numeric JSON secrets, `docker login -p X`, and `mysql -pX`.
+- A quoted value that contains an unescaped same quote can leave a fragment.
+- Version-like dotted quads are masked as IPs, except `v1.2.3.4`, `pkg==1.2.3.4`, and `-rc`, `-alpha`, `-beta` or `+build` forms.
+- `auth: 4 passed`-style prose is masked, because `auth` is a secret word.
+
+---
+
 ## receipt.json
 
 The Bailiff writes `receipt.json` to `RECEIPT_PATH`. The offline demo writes it to `--receipt` (default `receipt.json`, or `RECEIPT_PATH` if set). Each run generates the file; it is not source and is not part of the repo. Fields come from [`bailiff/receipt.py`](bailiff/receipt.py):
@@ -114,6 +158,7 @@ The Bailiff writes `receipt.json` to `RECEIPT_PATH`. The offline demo writes it 
 | `fix` | `branch`, `verified_on`, `outcome` |
 | `attestations` | Per owner: `machine`, `owner`, `at`, `approval_message_id` |
 | `redactions` | Count of redacted values |
+| `privacy` | Optional: placeholder counts and one masked example (see Privacy) |
 
 ```
 python -m bailiff.replay receipt.json --docker
@@ -141,6 +186,7 @@ sample-app/export-service/     Node app with auth middleware
   case-demo/                   SqlAuthGuard.js and consumer.js (case-only import)
   docs-case-bug/               notes on the case bug
 deploy/                        Dockerfile.alice, Dockerfile.bob, docker-compose.yml
+scripts/judge.py               one-command check (python scripts/judge.py)
 scripts/check_judge_path.py    judge-path check (needs Docker)
 tests/                         pytest suite for bailiff/
 docs/PARITYCOURT.md            full design, flow, risks, judge path
@@ -149,10 +195,14 @@ justfile, pyproject.toml       commands and project metadata
 
 ---
 
-## Tests
+## Quality
 
-- `just test` runs `python -m pytest -q` over `tests/`. The last full run passed. The count changes, so see the output of `just test`.
-- `just check` runs ruff (lint and format check) over `bailiff`, `tests` and `scripts`. `just typecheck` runs mypy in strict mode over `bailiff/`.
+- **445 tests pass** with `python -m pytest -q` (`just test`). Branch coverage is 94 percent; the CI gate is 90 percent.
+- **Property tests.** hypothesis tests cover the redactor and the PII masking ([`tests/test_redact_properties.py`](tests/test_redact_properties.py), [`tests/test_pii_properties.py`](tests/test_pii_properties.py)).
+- **Strict types and lint.** `mypy --strict` over `bailiff/` (`just typecheck`) and `ruff` over `bailiff`, `tests` and `scripts` (`just check`) are clean.
+- **CI is configured, not yet run.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) covers lint, types and tests on Python 3.11 and 3.12 with the coverage gate; bandit, pip-audit and gitleaks; a Node job (Node 22 must pass, Node 18 must fail with `toSorted is not a function`); the Docker judge path; actionlint; and an aggregate `ci-ok` job. Dependabot and pre-commit are configured. The repo is private, so there is no badge yet.
+<!-- CI badge: add after the repo is public -->
+- **Planned:** mutation tests on the pure modules.
 
 ---
 
@@ -164,6 +214,7 @@ justfile, pyproject.toml       commands and project metadata
 | Offline demo | Simulated: in-memory room, scripted agents, canned output |
 | Judge path | Two Node containers: Alice runs Node 22; Bob's image has Node 22 and Node 18 stages ([`deploy/`](deploy/)). Not a Mac or an Ubuntu box. Containers not yet built or run `(to be verified)`. |
 | Switch-room mode | `(live mode in progress)` |
+| CI | Written in `.github/workflows/ci.yml`; not yet run on GitHub (repo is private) |
 | Owner-only approval | Verified by reading Switch code; live test `(to be verified)` |
 | Case-only import on a real Mac | Replayed and recorded per the design doc; recording location `(to be verified)` |
 
@@ -173,7 +224,10 @@ justfile, pyproject.toml       commands and project metadata
 - **The judge path reproduces a Node-version bug**, not the case bug. The `toSorted` failure on Node 18 was reproduced on real Node 18.20.8 vs Node 22.23.4 on the author's machine (via npx). Inside the Docker containers it is `(to be verified)` by running `just demo-docker`.
 - **The case-only import is the real-world analogue.** `SqlAuthGuard` vs `sqlAuthGuard` fails on a case-sensitive filesystem (ext4) and resolves on a case-insensitive one (APFS). The judge containers do not reproduce it. A privileged case-insensitive mount to reproduce it is untested.
 - **Switch has no loop breaker or dual sign-off.** The turn cap is Bailiff code and is optional.
-- **Secret redaction is best effort.** It combines Switch's guardrail with a regex. It is not a guarantee against every secret format.
+- **Privacy masking is regex and checksum only.** Its limits are listed under [Privacy](#privacy). Whether Switch's own guardrail masks real agent replies is unverified. Masking is not a substitute for a security review.
+- **Custom Python agents cannot raise Switch approval cards (unverified).** The scripted agents' owner gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing. Real approval cards appear only for real Claude Code and Codex, in the recorded run. Unverified end to end until the live run.
+- **Masked suspects are not ablated.** A suspect whose value contains a placeholder gets verdict `unknown` (`not ablated: value masked`).
+- **No ablation, no verdict.** If nothing could be ablated, the receipt is INCONCLUSIVE.
 - **Verification covers one test.** A passing re-run of the failing test is not proof the fix is correct beyond that test.
 
 ---

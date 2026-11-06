@@ -2,9 +2,15 @@
 
 How to decompose work, delegate to sub-agents, and drive tasks to completion.
 
+## Foreground only
+
+Always spawn subagents in the foreground (`run_in_background` unset or false). Wait for each result before the next step.
+
 ## No-pause rule
 
 The pipeline is automatic. Never ask "want me to delegate?", never present findings and wait for permission to act on them. When something needs doing, do it.
+
+**Git actions are never automatic.** Commit, push, and branch creation always need the user's explicit go-ahead, per `git-safety.md`. Doing the work, running gates, and fixing findings stay automatic.
 
 **Pause ONLY for:** missing credentials, a destructive action (see git-safety), genuinely ambiguous requirements where two readings would produce incompatible results, or the round cap.
 

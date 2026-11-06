@@ -21,7 +21,7 @@ import httpx
 import websockets
 
 from bailiff.events import Event, Malformed, detail, parse_event
-from bailiff.redact import redact
+from bailiff.redact import redact_bounded
 
 MAX_BACKOFF = 30.0
 REFUSED_CLOSE_CODES = range(4400, 4500)
@@ -50,7 +50,8 @@ class OpError(Exception):
 
 
 async def _default_dial(url: str, headers: dict[str, str]) -> Any:
-    return await websockets.connect(url, additional_headers=headers)
+    # max_size is pinned to 1 MiB so an oversized frame is refused, whatever the library default is.
+    return await websockets.connect(url, additional_headers=headers, max_size=2**20)
 
 
 def _check(name: str, resp: httpx.Response) -> None:
@@ -185,7 +186,7 @@ class SwitchConnection:
 
     async def post(self, room_id: str, text: str) -> int:
         """Post to a room. Redacts first and returns how many secrets were masked."""
-        clean, hits = redact(text)
+        clean, hits = redact_bounded(text)
         resp = await self._http.post(
             f"/agents/{self._agent_id}/message",
             json={"room_id": room_id, "content": clean},

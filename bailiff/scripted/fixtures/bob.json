@@ -6,7 +6,7 @@
     "node -v": {"exit_code": 0, "stdout": "v18.20.4\n"},
     "env": {
       "exit_code": 0,
-      "stdout": "HOME=/home/bob\nPATH=/usr/bin:/bin\nTZ=UTC\nNODE_OPTIONS=--max-old-space-size=2048\nDATABASE_PASSWORD=hunter2-bob\n"
+      "stdout": "HOME=/home/bob\nUSER=bob\nHOSTNAME=bob-staging\nEMAIL=bob@example.org\nSSH_CLIENT=192.168.1.20 40022 22\nPATH=/usr/bin:/bin\nTZ=UTC\nNODE_OPTIONS=--max-old-space-size=2048\nDATABASE_PASSWORD=hunter2-bob\n"
     },
     "git config core.ignorecase": {"exit_code": 1, "stdout": ""},
     "printenv TZ": {"exit_code": 0, "stdout": "UTC\n"},
@@ -16,6 +16,6 @@
       "stdout": "",
       "stderr": "TypeError: [].toSorted is not a function\n    at test.js:3:12\n"
     },
-    "/opt/node22/bin/node test.js": {"exit_code": 0, "stdout": "auth: 4 passed\n"}
+    "/opt/node22/bin/node test.js": {"exit_code": 0, "stdout": "suite: 4 passed\n"}
   }
 }

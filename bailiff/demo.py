@@ -18,8 +18,10 @@ import os
 from pathlib import Path
 from typing import Any
 
+from bailiff.ablation import NOT_ABLATED_MASKED
 from bailiff.agent import serve
 from bailiff.models import Runner, RunnerFn
+from bailiff.privacy import masked_example, placeholder_counts
 from bailiff.receipt import save_receipt
 from bailiff.replay import replay
 from bailiff.scripted.fake_room import FakeRoom
@@ -29,7 +31,7 @@ FIXTURES = Path(__file__).parent / "scripted" / "fixtures"
 TRIGGER = "!open case export-service 500 AuthVerifierError on Ubuntu, passes on the Mac"
 
 
-async def run_offline() -> tuple[dict[str, Any], FakeRoom]:
+async def run_offline(fixtures: Path = FIXTURES) -> tuple[dict[str, Any], FakeRoom]:
     room = FakeRoom()
     bailiff = room.join("bailiff")
     machines = [
@@ -39,7 +41,7 @@ async def run_offline() -> tuple[dict[str, Any], FakeRoom]:
                 room.room_id,
                 "alice",
                 "alice-claude",
-                fixture_runner(FIXTURES / "alice.json"),
+                fixture_runner(fixtures / "alice.json"),
             )
         ),
         asyncio.create_task(
@@ -48,7 +50,7 @@ async def run_offline() -> tuple[dict[str, Any], FakeRoom]:
                 room.room_id,
                 "bob",
                 "bob-codex",
-                fixture_runner(FIXTURES / "bob.json"),
+                fixture_runner(fixtures / "bob.json"),
             )
         ),
     ]
@@ -78,6 +80,15 @@ def _fixture_replayer(path: Path) -> RunnerFn:
     return replay_step
 
 
+def privacy_line(messages: list[tuple[str, str]]) -> str:
+    """Say what the room transcript holds of the masking, by placeholder type."""
+    counts = placeholder_counts(messages)
+    if not counts:
+        return "privacy: no placeholders seen in the room transcript"
+    parts = ", ".join(f"{kind}={n}" for kind, n in counts.items())
+    return f"privacy: masked {parts} (placeholders seen in the room transcript)"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m bailiff.demo")
     parser.add_argument("--offline", action="store_true", help="run against the in-memory room")
@@ -101,6 +112,9 @@ def main(argv: list[str] | None = None) -> int:
         if step["variable"].endswith(" (no-op)")
     ]
     print(f"not ablated (no-op, verdict unknown): {', '.join(not_ablated) or 'none'}")
+    masked = [s["name"] for s in receipt["suspects"] if s["note"] == NOT_ABLATED_MASKED]
+    if masked:
+        print(f"not ablated (value masked): {', '.join(masked)}")
     for suspect in receipt["suspects"]:
         print(f"  suspect {suspect['name']}: alice={suspect['alice']} bob={suspect['bob']}")
         print(f"    verdict: {suspect['verdict']}")
@@ -109,6 +123,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"culprit: {json.dumps(receipt['culprit'])}")
     print(f"fix re-run on bob: {json.dumps(receipt['fix'])}")
     print(f"redactions: {receipt['redactions']}")
+    print(privacy_line(room.messages))
+    example = masked_example(room.messages)
+    if example is not None:
+        print(f"masked example: {example}")
     print(f"receipt written to {args.receipt}")
     results = replay(str(args.receipt), _fixture_replayer(FIXTURES / "bob.json"))
     matched = sum(result.matched for result in results)

@@ -1,4 +1,4 @@
-from bailiff.ablation import classify, plan_ablation
+from bailiff.ablation import NOT_ABLATED_MASKED, classify, plan_ablation
 from bailiff.models import Runner, StepResult, Suspect
 
 BASE = Runner("node:18-bookworm-slim", {}, ["node", "test.js"])
@@ -73,3 +73,30 @@ def test_a_no_op_suspect_is_never_the_culprit_even_when_its_step_passes() -> Non
     ]
     verdicts = [s.verdict for s in classify(SUSPECTS, results)]
     assert verdicts == ["decoy", "decoy", "decoy", "unknown"]
+
+
+MASKED_NODE_OPTIONS = Suspect(
+    "node_options", "--inspect=[redacted:ip]:9229", "--inspect=[redacted:ip]:9229", "unknown"
+)
+
+
+def test_a_masked_suspect_gets_no_step_so_no_placeholder_reaches_an_env() -> None:
+    assert plan_ablation([MASKED_NODE_OPTIONS], base=BASE) == []
+
+
+def test_a_masked_from_value_alone_is_enough_to_skip_the_step() -> None:
+    suspect = Suspect("tz", "Asia/Kolkata", "[redacted:host]", "unknown")
+    assert plan_ablation([suspect], base=BASE) == []
+    (verdict,) = classify([suspect], [])
+    assert (verdict.verdict, verdict.note) == ("unknown", NOT_ABLATED_MASKED)
+
+
+def test_a_masked_suspect_is_unknown_and_a_node_major_difference_is_still_the_culprit() -> None:
+    suspects = [MASKED_NODE_OPTIONS, Suspect("node", "v22.11.0", "v18.20.4", "unknown")]
+    steps = plan_ablation(suspects, base=BASE)
+    assert [(step.id, step.variable) for step in steps] == [("ablation-2", "node")]
+    verdicts = classify(suspects, [StepResult("ablation-2", 0, "pass", True)])
+    assert [(s.name, s.verdict, s.note) for s in verdicts] == [
+        ("node_options", "unknown", NOT_ABLATED_MASKED),
+        ("node", "culprit", ""),
+    ]

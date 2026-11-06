@@ -26,3 +26,7 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
+.coverage
+coverage.xml
+htmlcov/

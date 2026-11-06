@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from bailiff.models import AblationStep
+from bailiff.redact import mask_secret_lines, redact
 
 _OUTCOMES = ("pass", "fail")
 _VERDICTS = ("unknown", "decoy", "culprit")
@@ -107,6 +108,22 @@ def _check_items(
     return valid
 
 
+def _check_privacy(privacy: Any, problems: list[str]) -> None:
+    if not isinstance(privacy, dict):
+        problems.append("receipt.privacy: expected an object")
+        return
+    counts = privacy.get("placeholders")
+    if not isinstance(counts, dict) or not all(
+        isinstance(kind, str) and _is_kind(n, int) and n >= 0 for kind, n in counts.items()
+    ):
+        problems.append("receipt.privacy.placeholders: expected a map of type to count >= 0")
+    example = privacy.get("example")
+    if not isinstance(example, str) or len(example) > 200:
+        problems.append("receipt.privacy.example: expected a string of at most 200 characters")
+    elif redact(example)[1] or mask_secret_lines(example)[1]:
+        problems.append("receipt.privacy.example: holds text that masking would still change")
+
+
 def validate_receipt(d: dict[str, Any]) -> list[str]:
     if not isinstance(d, dict):
         return ["receipt: expected a JSON object"]
@@ -180,6 +197,9 @@ def validate_receipt(d: dict[str, Any]) -> list[str]:
             problems.append(f"receipt.{key}: expected bool")
     if inconclusive and not isinstance(d.get("inconclusive_reason"), str):
         problems.append("receipt.inconclusive_reason: required when inconclusive is true")
+
+    if "privacy" in d:
+        _check_privacy(d["privacy"], problems)
 
     redactions = d.get("redactions")
     if isinstance(redactions, int) and redactions < 0:

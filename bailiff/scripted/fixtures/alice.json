@@ -6,11 +6,11 @@
     "node -v": {"exit_code": 0, "stdout": "v22.11.0\n"},
     "env": {
       "exit_code": 0,
-      "stdout": "HOME=/Users/alice\nPATH=/usr/local/bin:/usr/bin:/bin\nTZ=Europe/London\nNODE_OPTIONS=--max-old-space-size=4096\nDATABASE_PASSWORD=hunter2-alice\n"
+      "stdout": "HOME=/Users/alice\nUSER=alice\nHOSTNAME=alice-mac.local\nEMAIL=alice@example.com\nSSH_CLIENT=10.20.30.40 52211 22\nPATH=/usr/local/bin:/usr/bin:/bin\nTZ=Europe/London\nNODE_OPTIONS=--max-old-space-size=4096\nDATABASE_PASSWORD=hunter2-alice\n"
     },
     "git config core.ignorecase": {"exit_code": 0, "stdout": "true\n"},
     "printenv TZ": {"exit_code": 0, "stdout": "Europe/London\n"},
     "printenv NODE_OPTIONS": {"exit_code": 0, "stdout": "--max-old-space-size=4096\n"},
-    "node test.js": {"exit_code": 0, "stdout": "auth: 4 passed\n"}
+    "node test.js": {"exit_code": 0, "stdout": "suite: 4 passed\n"}
   }
 }

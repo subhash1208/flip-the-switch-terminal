@@ -1,0 +1,15 @@
+title = "ParityCourt gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic self-test fixture strings for the Copilot guardrail hook"
+# Deliberately fake secrets and PII, used to test redaction. Keep these paths narrow.
+paths = [
+    '''^\.github/hooks/scripts/guardrail\.py$''',
+    # The .claude and .kiro guardrail hook copies carry the same fake self-test strings.
+    '''^\.(claude|kiro)/hooks/scripts/kiro-guardrail\.py$''',
+    '''^tests/''',
+    '''^bailiff/scripted/fixtures/''',
+]

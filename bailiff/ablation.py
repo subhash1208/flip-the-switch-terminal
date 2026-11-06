@@ -4,6 +4,12 @@ from bailiff.models import AblationStep, Runner, StepResult, Suspect
 
 _NODE22_CMD = ["/opt/node22/bin/node", "test.js"]
 _ABLATED = frozenset({"node", "tz", "node_options"})
+NOT_ABLATED_MASKED = "not ablated: value masked"
+
+
+def _masked(suspect: Suspect) -> bool:
+    """A masked display value holds a placeholder, which is not a value to put in a command."""
+    return "[redacted" in suspect.alice or "[redacted" in suspect.bob
 
 
 def _step_for(suspect: Suspect, base: Runner) -> tuple[str, Runner]:
@@ -23,6 +29,8 @@ def plan_ablation(
     root = Runner("node:18-bookworm-slim", {}, ["node", "test.js"]) if base is None else base
     steps: list[AblationStep] = []
     for index, suspect in enumerate(suspects, start=1):
+        if _masked(suspect):
+            continue
         variable, runner = _step_for(suspect, root)
         steps.append(
             AblationStep(
@@ -43,13 +51,15 @@ def classify(suspects: list[Suspect], results: list[StepResult]) -> list[Suspect
     classified: list[Suspect] = []
     for index, suspect in enumerate(suspects, start=1):
         outcome = outcomes.get(f"ablation-{index}")
-        verdict = suspect.verdict
-        if suspect.name not in _ABLATED:
+        verdict, note = suspect.verdict, suspect.note
+        if _masked(suspect):
+            verdict, note = "unknown", NOT_ABLATED_MASKED
+        elif suspect.name not in _ABLATED:
             verdict = "unknown"
         elif outcome == "pass" and not culprit_found:
             verdict = "culprit"
             culprit_found = True
         elif outcome == "fail":
             verdict = "decoy"
-        classified.append(replace(suspect, verdict=verdict))
+        classified.append(replace(suspect, verdict=verdict, note=note))
     return classified
