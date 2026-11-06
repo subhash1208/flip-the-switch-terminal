@@ -7,7 +7,7 @@ This file tracks status, owners, and what is left. The idea and the 8-step flow 
 
 ## Status
 
-**As of Nov 6, 2026, 17:15 IST (about 30 hours to the deadline).** The offline core is built and verified on Subhash's Windows PC: the `bailiff/` package, 132 passing pytest tests, strict mypy and ruff clean, and `python -m bailiff.demo --offline`, which replays 4 of 4 steps on canned fixtures (labelled SIMULATED). Nothing has run against a real Switch server yet. Live mode, the Docker judge path, CI, privacy masking, and the demo video are not done.
+**As of Nov 7, 2026, 01:30 IST (about 22 hours to the deadline).** The offline core is built and verified on Subhash's Windows PC: the `bailiff/` package, 572 passing pytest tests (about 94% branch coverage), strict mypy and ruff clean, and `python -m bailiff.demo --offline`, which replays 4 of 4 steps on canned fixtures (labelled SIMULATED). Live mode is merged to main and has run once against Switch 0.31.0 with scripted Alice and Bob. The Docker judge path passes (`python scripts/judge.py`, 8 of 8) and CI is 8 jobs, all green. Real Claude Code agents in the room (in progress) and the demo video are not done.
 
 | Name | Role | Machine |
 |------|------|---------|
@@ -29,7 +29,10 @@ Owner is Subhash with his AI coding agents unless noted.
 | Item | Notes |
 |------|-------|
 | `bailiff/` Python package | Allow-listed probes, secret redaction, fingerprint and diff, ablation planner and classifier, receipt build/validate/replay, WebSocket transport with pong-and-cursor, reconnect and `taken_over` handling, Bailiff agent loop, scripted alice and bob agents, in-process fake room |
-| Tests and checks | 132 pytest tests pass; mypy strict and ruff clean (run on Subhash's PC) |
+| Tests and checks | 572 pytest tests pass, about 94% branch coverage; mypy strict and ruff clean |
+| Live mode (`python -m bailiff.demo --live`) | Merged to main. Registers pc-live-bailiff, pc-live-alice and pc-live-bob, runs one case over real WebSockets against Switch 0.31.0. Alice and Bob are scripted agents on canned fixtures (scripted-machine live transport). Transcript: `docs/evidence/transcript.txt` |
+| Judge path in Docker | `python scripts/judge.py` 8 of 8 with Docker; container check 5 of 5 |
+| CI workflow | 8 jobs, all green |
 | Offline demo | `python -m bailiff.demo --offline` runs the whole story on canned fixtures (labelled SIMULATED), writes `receipt.json`, and replays 4 of 4 steps |
 | Sample app | `sample-app/export-service`: Node 18.20.8 fails with `scopes.toSorted is not a function`; Node 22 passes. The TZ and NODE_OPTIONS decoys are harmless. |
 | Research | About 80 rival repos scanned; Switch docs gotchas; blog research |
@@ -39,24 +42,21 @@ Owner is Subhash with his AI coding agents unless noted.
 
 | Item | Notes |
 |------|-------|
-| Dockerfiles, `deploy/docker-compose.yml`, `justfile`, `scripts/check_judge_path.py` | Written. NOT run: Docker is not installed on Subhash's PC. |
 | `README.md` | Draft. Final pass pending. |
 
 ### In progress
 
 | Item | Owner | Notes |
 |------|-------|-------|
-| Commit, push to `feature/subhash`, open PR | Subhash | Boss merges |
+| Open PR against `main` (docs sweep on `docs/stale-sweep`) | Subhash | Boss merges |
 
 ### Not started
 
 | Item | Owner | Notes |
 |------|-------|-------|
 | Install WSL2 and Docker Desktop on Subhash's PC, on the D: drive | Subhash; Boss supervises the admin install | Plan step 2 |
-| Live mode: register 3 agents with `POST /agents`, create a room, run one full case over the real WebSocket against a self-hosted Switch | Subhash | About 6 h box. Go/no-go at hour 2. Nothing has run against a real Switch yet. |
-| Run the judge path in Docker | Vatsav | Needs Docker. Expected Node 18 failure in the Bob container (unverified until run). |
+| Real Claude Code Alice and Bob in the room | Subhash | In progress. Not claimed done. |
 | Judge command and `JUDGES.md` | Subhash | |
-| CI workflow | Subhash | ruff, strict mypy, pytest with 90% coverage gate, hypothesis property tests, bandit, pip-audit, gitleaks, Node test job, Docker judge-path job, actionlint, pre-commit, Dependabot |
 | Privacy (PII) masking | Subhash | Planned. See `docs/PARITYCOURT.md`, Privacy. |
 | Property-based tests on redact and parsers | Subhash | |
 | Mutation tests on pure modules (cosmic-ray, 1 h box) | Subhash | |
@@ -99,14 +99,14 @@ Times are planned estimates, not commitments. The only fixed slot is the recordi
 You need a real Claude Code login on the Mac. The repo is private, so you need collaborator access first.
 
 - [ ] Install Docker Desktop and Switch Console.
-- [ ] `git clone` the repo, then `git checkout feature/subhash`.
+- [ ] `git clone` the repo, then `git checkout main`.
 - [ ] Run `python -m bailiff.demo --offline` and send the full output to Subhash. Use the Python version in `pyproject.toml`.
 - [ ] Confirm Claude Code is logged in on the Mac. In the recording, this is Alice.
 - [ ] Block Nov 7, 10:00–12:00 IST for the recording. Bring the Mac charged.
 
 ### Vatsav (Windows, Docker)
 
-- [ ] `git pull` on `feature/subhash`.
+- [ ] `git pull` on `main`.
 - [ ] Install Docker Desktop (WSL2 backend, as on Subhash's PC).
 - [ ] Run `python scripts/check_judge_path.py`, or run `docker compose -f deploy/docker-compose.yml run --rm bob` and then `docker compose -f deploy/docker-compose.yml run --rm alice`. Send the full output to Subhash.
 - [ ] Expected, unverified until run: the Bob container (Node 18) fails with `scopes.toSorted is not a function`, and the Alice container (Node 22) passes. Report what actually happens.
@@ -115,18 +115,18 @@ You need a real Claude Code login on the Mac. The repo is private, so you need c
 ### Hashwanth (Windows)
 
 - [ ] Proofread `README.md` and `docs/PARITYCOURT.md` for clarity and typos.
-- [ ] Fix typos in a PR to `feature/subhash`, committed from your own account.
+- [ ] Fix typos in a PR to `main`, committed from your own account.
 - [ ] Draft the #HowISwitch post text. The tags are listed in `docs/PARITYCOURT.md`, Prize Stacking.
 
 ## How to help (if you are idle)
 
-- Review an open PR against `feature/subhash`. Comment; do not merge.
+- Review an open PR against `main`. Comment; do not merge.
 - Test the README from a clean clone, on a machine that has not run this project before. Note every step that fails.
 - Rehearse the demo walkthrough with a timer. Target 80–150 s. Beats: the approval card, a refused non-owner action, the culprit isolated, the replay.
 
 ## Rules
 
-- Never push to `main`. Open PRs against `feature/subhash`.
+- Never push to `main`. Open PRs against `main`.
 - Boss (Subhash) merges PRs.
 - No secrets in the repo, in commits, or in chat. That includes API keys, tokens, and Claude Code login details.
 - Branch and commit policy: see `CONTRIBUTING.md`.

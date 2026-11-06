@@ -12,8 +12,8 @@ ParityCourt is three Switch agents working one bug case in one Switch room. Each
 
 | Agent | Runs on | What it does | Who may approve its probes |
 |---|---|---|---|
-| `@alice-claude` (role `baseline-counsel`) | Claude Code on Alice's machine (macOS host, or the Alice container on the judge path) | Fingerprints its machine, proposes allow-listed probes, writes the fix | Alice only |
-| `@bob-codex` (role `forensic-prosecutor`) | Codex on the failing machine (Ubuntu 24.04 over SSH in the recorded run; the Bob container on the judge path) | Fingerprints the failing machine, runs the one ablation, re-runs the failing test | Bob only |
+| `@alice-claude` (role `baseline-counsel`) | Claude Code on Alice's machine (in progress; macOS host, or the Alice container on the judge path) | Fingerprints its machine, proposes allow-listed probes, writes the fix | Alice only |
+| `@bob-codex` (handle only; role `forensic-prosecutor`) | Claude Code on the failing machine (in progress). Fallback: the scripted Bob Node 18 container on the judge path | Fingerprints the failing machine, runs the one ablation, re-runs the failing test | Bob only |
 | `@bailiff` (role `court-arbiter`) | Custom Python agent in [`bailiff/`](bailiff/) | Opens the case, keeps the case file, diffs fingerprints, redacts env dumps, writes `receipt.json` | Nobody. It holds no approval power. |
 
 **Room setup**
@@ -81,23 +81,23 @@ privacy: masked email=2, host=4, ip=2, secret=2, user=4 (placeholders seen in th
 replay: 4/4 steps matched (fixture replay, not Docker)
 ```
 
-`python -m bailiff.demo --live` is not built yet: it prints a TODO and exits 2.
+`python -m bailiff.demo --live` is merged to main. It needs `BAILIFF_BASE_URL` and `SWITCH_REGISTRATION_TOKEN`, registers `pc-live-bailiff`, `pc-live-alice` and `pc-live-bob`, makes an `internal_only` room and runs the case over real WebSockets against Switch 0.31.0. Alice and Bob are scripted agents answering from canned fixtures, so this is scripted-machine live transport, not real Claude Code agents. Transcript: [`docs/evidence/transcript.txt`](docs/evidence/transcript.txt).
 
 **Replay in containers (needs Docker)**
 
 ```
 just replay        # after the offline demo: re-runs receipt.json steps with docker run
 just judge-check   # runs the judge-path check (needs Docker)
-just demo-docker   # docker compose build, then the judge-path check (needs Docker; not yet run)
+just demo-docker   # docker compose build, then the judge-path check (needs Docker)
 ```
 
-`just judge-check` runs [`scripts/check_judge_path.py`](scripts/check_judge_path.py), and `just demo-docker` runs `docker compose build` first. The check expects five results: Alice on Node 22 passes; Bob on Node 18 fails with `toSorted is not a function`; Bob's Node 22 binary passes; Alice with `TZ=UTC` passes; Alice with Bob's `NODE_OPTIONS` passes. Exit 0 means every case matched, 1 means a FAIL, 2 means Docker is not on PATH. Not yet run: `(to be verified)`
+`just judge-check` runs [`scripts/check_judge_path.py`](scripts/check_judge_path.py), and `just demo-docker` runs `docker compose build` first. The check expects five results: Alice on Node 22 passes; Bob on Node 18 fails with `toSorted is not a function`; Bob's Node 22 binary passes; Alice with `TZ=UTC` passes; Alice with Bob's `NODE_OPTIONS` passes. Exit 0 means every case matched, 1 means a FAIL, 2 means Docker is not on PATH. Docker run: container check 5/5.
 
-**Run it on a real Switch room (live mode in progress)**
+**Run it on a real Switch room (live mode merged; real Claude Code agents in progress)**
 
 The live entry point is the Bailiff agent process, `python -m bailiff.agent`.
 
-1. Self-host Switch with Docker Compose, following the [self-host guide](https://docs.switchagents.ai/switch-rooms/deploy/self-host). Pin the Switch version it names (`SWITCH_VERSION` is not confirmed in the docs: `(to be verified)`). Set `SECRET_KEYS` (`<id>:<secret>` pairs, each secret at least 32 characters) and `AGENT_REGISTRATION_TOKEN`. Keep both out of git.
+1. Self-host Switch 0.31.0, the version the live run used, with Docker Compose, following the [self-host guide](https://docs.switchagents.ai/switch-rooms/deploy/self-host). Set `SECRET_KEYS` (`<id>:<secret>` pairs, each secret at least 32 characters) and `AGENT_REGISTRATION_TOKEN`. Keep both out of git.
 2. Register `alice-claude`, `bob-codex` and `bailiff` with `POST /agents`, using a registration key from your own account. The docs say agents registered with the bootstrap key belong to a separate account. The response returns each agent's API key once. Store keys in environment variables, never in the repo.
 3. Keep every agent on the default addressing policy, which admits its owner and the owner's agents. Never set `anyone`.
 4. Start the Bailiff with `python -m bailiff.agent`. It reads `BAILIFF_BASE_URL`, `BAILIFF_AGENT_ID`, `BAILIFF_API_KEY`, `BAILIFF_CONNECTION_ID` (a UUID, reused on every reconnect), `ROOM_ID` and `RECEIPT_PATH`. Optional: `ALICE_HANDLE`, `BOB_HANDLE`, `STEP_TIMEOUT`.
@@ -197,14 +197,29 @@ justfile, pyproject.toml       commands and project metadata
 
 ## Quality
 
-- **445 tests pass** with `python -m pytest -q` (`just test`). Branch coverage is 94 percent; the CI gate is 90 percent.
+- **572 tests pass** with `python -m pytest -q` (`just test`). Branch coverage is 94 percent; the CI gate is 90 percent.
 - **Property tests.** hypothesis tests cover the redactor and the PII masking ([`tests/test_redact_properties.py`](tests/test_redact_properties.py), [`tests/test_pii_properties.py`](tests/test_pii_properties.py)).
 - **Strict types and lint.** `mypy --strict` over `bailiff/` (`just typecheck`) and `ruff` over `bailiff`, `tests` and `scripts` (`just check`) are clean.
-- **CI is configured, not yet run.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) covers lint, types and tests on Python 3.11 and 3.12 with the coverage gate; bandit, pip-audit and gitleaks; a Node job (Node 22 must pass, Node 18 must fail with `toSorted is not a function`); the Docker judge path; actionlint; and an aggregate `ci-ok` job. Dependabot and pre-commit are configured. The repo is private, so there is no badge yet.
+- **CI: 8 jobs, all green.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) covers lint, types and tests on Python 3.11 and 3.12 with the coverage gate; bandit, pip-audit and gitleaks; a Node job (Node 22 must pass, Node 18 must fail with `toSorted is not a function`); the Docker judge path; actionlint; and an aggregate `ci-ok` job. Dependabot and pre-commit are configured. The repo is private, so there is no badge yet.
 <!-- CI badge: add after the repo is public -->
 - **Planned:** mutation tests on the pure modules.
 
 ---
+
+## Scaling and limits
+
+- **Isolation.** Each case runs in its own Switch room (one room per case). Scale by adding rooms or running more Bailiff processes.
+- **Cost.** One ablation per differing variable, so the cost per case is linear in the number of variables that differ.
+- **Replay** is stateless and keyless: `receipt.json` re-runs in Docker with no Switch server and no keys.
+- **No model call in the Bailiff**, so it adds no API cost and no rate limit.
+- **Adding a machine** means one more Switch agent plus its fingerprint.
+- **Limits:**
+  - One-variable ablation misses bugs that need two variables changed together. Pairwise ablation would catch them, at quadratic cost.
+  - The design compares two machines per case. For N machines, cluster by fingerprint and compare one representative per cluster. Not built.
+  - Probes are a hand-maintained allow-list.
+  - Owner approval caps throughput by design: every probe waits for its machine's owner.
+  - Masking is regex and checksum, with the gaps listed under [Privacy](#privacy).
+  - Concurrent cases in one Bailiff process have not been load-tested. The design is room-per-case.
 
 ## Honest limits
 
@@ -212,20 +227,20 @@ justfile, pyproject.toml       commands and project metadata
 |---|---|
 | Receipt format, validation and `replay` | Code in `bailiff/receipt.py` and `bailiff/replay.py`; pytest coverage in `tests/` |
 | Offline demo | Simulated: in-memory room, scripted agents, canned output |
-| Judge path | Two Node containers: Alice runs Node 22; Bob's image has Node 22 and Node 18 stages ([`deploy/`](deploy/)). Not a Mac or an Ubuntu box. Containers not yet built or run `(to be verified)`. |
-| Switch-room mode | `(live mode in progress)` |
-| CI | Written in `.github/workflows/ci.yml`; not yet run on GitHub (repo is private) |
+| Judge path | Two Node containers: Alice runs Node 22; Bob's image has Node 22 and Node 18 stages ([`deploy/`](deploy/)). Not a Mac or an Ubuntu box. `python scripts/judge.py` with Docker: 8/8 checks; container check 5/5. |
+| Switch-room mode | Live mode merged to main; ran once against Switch 0.31.0 with scripted Alice and Bob ([transcript](docs/evidence/transcript.txt)). Real Claude Code agents in the room: in progress. |
+| CI | 8 jobs, all green ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) |
 | Owner-only approval | Verified by reading Switch code; live test `(to be verified)` |
 | Case-only import on a real Mac | Replayed and recorded per the design doc; recording location `(to be verified)` |
 
 - **Approval identity is the participant's name, not a signed identity.** An attestation records who said yes. It is not a cryptographic signature.
 - **Probes are allow-listed.** Agents run only approved commands and never read `.env` files.
-- **Scripted agents stand in for Claude Code and Codex** on the keyless path. The recorded run uses the real agents `(to be verified against the recording)`.
-- **The judge path reproduces a Node-version bug**, not the case bug. The `toSorted` failure on Node 18 was reproduced on real Node 18.20.8 vs Node 22.23.4 on the author's machine (via npx). Inside the Docker containers it is `(to be verified)` by running `just demo-docker`.
+- **Scripted agents stand in for Claude Code** on the keyless path and in the live run. Real Claude Code agents for Alice and Bob in the room are in progress and not claimed done.
+- **The judge path reproduces a Node-version bug**, not the case bug. The `toSorted` failure on Node 18 was reproduced on real Node 18.20.8 vs Node 22.23.4 on the author's machine (via npx). Inside the Docker containers the check matched 5/5.
 - **The case-only import is the real-world analogue.** `SqlAuthGuard` vs `sqlAuthGuard` fails on a case-sensitive filesystem (ext4) and resolves on a case-insensitive one (APFS). The judge containers do not reproduce it. A privileged case-insensitive mount to reproduce it is untested.
 - **Switch has no loop breaker or dual sign-off.** The turn cap is Bailiff code and is optional.
 - **Privacy masking is regex and checksum only.** Its limits are listed under [Privacy](#privacy). Whether Switch's own guardrail masks real agent replies is unverified. Masking is not a substitute for a security review.
-- **Custom Python agents cannot raise Switch approval cards (unverified).** The scripted agents' owner gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing. Real approval cards appear only for real Claude Code and Codex, in the recorded run. Unverified end to end until the live run.
+- **Custom Python agents cannot raise Switch approval cards (unverified).** The scripted agents' owner gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing. Real approval cards would appear only for real Claude Code agents, which are in progress. Unverified end to end.
 - **Masked suspects are not ablated.** A suspect whose value contains a placeholder gets verdict `unknown` (`not ablated: value masked`).
 - **No ablation, no verdict.** If nothing could be ablated, the receipt is INCONCLUSIVE.
 - **Verification covers one test.** A passing re-run of the failing test is not proof the fix is correct beyond that test.

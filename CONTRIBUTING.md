@@ -6,10 +6,8 @@ Rules for working on this repo. Everyone follows these. No exceptions.
 
 ## Hackathon integration rule (Nov 6–7)
 
-While Boss is integrating, this overrides any `main` reference below:
-
-- Feature branches start from `feature/subhash` and open PRs into `feature/subhash`. Not `main`.
-- Boss merges `feature/subhash` into `main`.
+- Feature branches start from `main` and open PRs into `main`.
+- Boss merges PRs into `main`.
 - Nobody pushes directly to `main`.
 - PR review within 2 hours on build days (see Pull Requests, item 5).
 
@@ -19,9 +17,9 @@ While Boss is integrating, this overrides any `main` reference below:
 
 **Never push directly to `main`.** Ever.
 
-1. Create a feature branch for every piece of work, from `feature/subhash`:
+1. Create a feature branch for every piece of work, from `main`:
    ```
-   git checkout feature/subhash
+   git checkout main
    git pull
    git checkout -b feature/<your-name>/<short-description>
    ```
@@ -36,11 +34,11 @@ While Boss is integrating, this overrides any `main` reference below:
    git push -u origin feature/<your-name>/<short-description>
    ```
 
-3. Open a Pull Request on GitHub, base `feature/subhash`, when your work is ready for review.
+3. Open a Pull Request on GitHub, base `main`, when your work is ready for review.
 
 4. At least **one other team member** must review and approve before merging.
 
-5. Merge via GitHub PR into `feature/subhash` — do not merge locally with `git merge`.
+5. Merge via GitHub PR into `main` — do not merge locally with `git merge`.
 
 ---
 
@@ -131,9 +129,9 @@ The `.gitignore` handles most of this, but double-check before staging with `git
 
 ## Daily Workflow (Nov 4–7)
 
-1. **Start of day:** Pull latest `feature/subhash`.
+1. **Start of day:** Pull latest `main`.
    ```
-   git checkout feature/subhash
+   git checkout main
    git pull
    ```
 
@@ -143,9 +141,9 @@ The `.gitignore` handles most of this, but double-check before staging with `git
 
 4. **Open PR when ready.** Ping the team in chat for review.
 
-5. **After merge:** Delete your branch and pull `feature/subhash` again before starting the next task.
+5. **After merge:** Delete your branch and pull `main` again before starting the next task.
    ```
-   git checkout feature/subhash
+   git checkout main
    git pull
    git branch -d feature/<your-name>/<old-branch>
    ```
@@ -156,10 +154,10 @@ The `.gitignore` handles most of this, but double-check before staging with `git
 
 If you get a merge conflict:
 
-1. Pull latest `feature/subhash` into your branch:
+1. Pull latest `main` into your branch:
    ```
    git checkout your-branch
-   git pull origin feature/subhash
+   git pull origin main
    ```
 2. Resolve conflicts in your editor.
 3. Test that everything still works.

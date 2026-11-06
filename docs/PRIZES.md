@@ -25,7 +25,7 @@ The hackathon has $10,000+ in total prizes across multiple tracks. We can enter 
 - Two physical machines, two AI vendors, one custom agent — impossible without Switch
 - `just demo` one-command setup with 25+ pytest tests
 - Universal pain point ("works on my machine") elevated with Switch Trust security scan
-- 2:30 video with a clear courtroom narrative and a killer closing line
+- 80–150 second video with a clear courtroom narrative and a killer closing line
 
 ---
 
@@ -87,7 +87,7 @@ This post works because:
 - Cut a 60-second highlight reel from the demo video
 - Post it with a short punchy caption:
 
-  > "We built ParityCourt — a cross-machine debugging courtroom where Claude Code on Mac and Codex on Linux investigate bugs together through Switch. Two machines, three agents, one verdict. #HowISwitch @switchagents_ai @WeMakeDevs @DevToolsAcademy"
+  > "We built ParityCourt — a cross-machine debugging courtroom where Claude Code on Mac and a second agent on the failing machine investigate bugs together through Switch. Two machines, three agents, one verdict. #HowISwitch @switchagents_ai @WeMakeDevs @DevToolsAcademy"
 
 - Post on BOTH X and LinkedIn for maximum reach
 - Each team member can reshare from their own accounts
