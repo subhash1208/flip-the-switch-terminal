@@ -147,11 +147,11 @@ def check_privacy(receipt_path: Path, demo_stdout: str) -> Outcome:
         return Outcome(name, "FAIL", f"leaked: {', '.join(leaks)}")
     unmarked = [where for where, text in haystacks.items() if "[redacted" not in text]
     if unmarked:
-        return Outcome(name, "FAIL", f"no [redacted marker in {', '.join(unmarked)}")
+        return Outcome(name, "FAIL", f"no [redacted] marker in {', '.join(unmarked)}")
     return Outcome(
         name,
         "PASS",
-        f"0 of {len(pii)} fixture values found; [redacted marker in receipt and stdout",
+        f"0 of {len(pii)} fixture values found; [redacted] marker in receipt and stdout",
     )
 
 
@@ -252,7 +252,8 @@ def main(argv: list[str] | None = None) -> int:
         "server). Check 7 runs real Node. Check 8 runs real Docker when present."
     )
     print(
-        "Live Switch-room evidence: (to be added) in docs/evidence/ or the demo video. "
+        "Live Switch-room evidence: docs/evidence/transcript.txt "
+        "(recorded live run; scripted Alice and Bob) and the demo video. "
         "See JUDGES.md."
     )
     print(f"JUDGE RESULT: {'FAIL' if failed else 'PASS'}")
