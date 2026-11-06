@@ -1,7 +1,8 @@
 """Local demo of the full ParityCourt case.
 
     python -m bailiff.demo --offline [--receipt PATH]
-    BAILIFF_BASE_URL=... SWITCH_REGISTRATION_TOKEN=... python -m bailiff.demo --live
+    BAILIFF_BASE_URL=... SWITCH_REGISTRATION_TOKEN=... \
+        python -m bailiff.demo --live [--alice-agent NAME]
 
 --offline runs the real Bailiff flow against an in-memory room. Alice (macOS-like, Node 22) and Bob
 (Linux-like, Node 18) are scripted agents whose command output is canned in
@@ -28,7 +29,7 @@ import websockets
 
 from bailiff.ablation import NOT_ABLATED_MASKED
 from bailiff.agent import serve
-from bailiff.live import FIXTURES, LiveError, run_live
+from bailiff.live import BAILIFF, FIXTURES, LIVE, LiveError, run_live
 from bailiff.models import Runner, RunnerFn
 from bailiff.privacy import masked_example, placeholder_counts
 from bailiff.receipt import save_receipt
@@ -99,15 +100,17 @@ def privacy_line(messages: list[tuple[str, str]]) -> str:
     return f"privacy: masked {parts} (placeholders seen in the room transcript)"
 
 
-def run_live_demo(evidence: Path = EVIDENCE) -> int:
+def run_live_demo(evidence: Path = EVIDENCE, alice_agent: str | None = None) -> int:
     base = os.environ.get("BAILIFF_BASE_URL")
     token = os.environ.get("SWITCH_REGISTRATION_TOKEN")
     if not base or not token:
         print("error: --live needs BAILIFF_BASE_URL and SWITCH_REGISTRATION_TOKEN set")
         return 2
     print(f"LIVE: running against a real Switch server at {base} (not simulated)")
+    if alice_agent:
+        print(f"LIVE: Alice is @{alice_agent}, a real agent (not scripted)")
     try:
-        receipt = asyncio.run(run_live(base, token, evidence))
+        receipt = asyncio.run(run_live(base, token, evidence, alice_agent=alice_agent))
     except (
         LiveError,
         OpError,
@@ -140,11 +143,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m bailiff.demo")
     parser.add_argument("--offline", action="store_true", help="run against the in-memory room")
     parser.add_argument("--live", action="store_true", help="run against a real Switch server")
+    parser.add_argument(
+        "--alice-agent", metavar="NAME", help="with --live: a Console agent plays Alice"
+    )
     default_receipt = os.environ.get("RECEIPT_PATH", "receipt.json")
     parser.add_argument("--receipt", type=Path, default=Path(default_receipt))
     args = parser.parse_args(argv)
     if args.live:
-        return run_live_demo()
+        if args.alice_agent in {BAILIFF, *LIVE.values()}:
+            print(f"error: --alice-agent {args.alice_agent} is a scripted pc-live name")
+            return 2
+        return run_live_demo(alice_agent=args.alice_agent)
+    if args.alice_agent:
+        print("error: --alice-agent needs --live")
+        return 2
     if not args.offline:
         print("error: choose a mode: --offline or --live")
         return 2

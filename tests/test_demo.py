@@ -141,6 +141,47 @@ def test_running_with_no_mode_flag_refuses_and_exits_2(capsys: pytest.CaptureFix
     assert "choose a mode: --offline or --live" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("argv", "alice"),
+    [(["--live"], None), (["--live", "--alice-agent", "alice-claude"], "alice-claude")],
+)
+def test_alice_agent_reaches_the_live_run_only_when_given(
+    argv: list[str], alice: str | None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[str | None] = []
+
+    def live_demo(evidence: Path = demo.EVIDENCE, alice_agent: str | None = None) -> int:
+        seen.append(alice_agent)
+        return 0
+
+    monkeypatch.setattr(demo, "run_live_demo", live_demo)
+    assert main(argv) == 0
+    assert seen == [alice]
+
+
+@pytest.mark.parametrize("name", ["pc-live-alice", "pc-live-bob", "pc-live-bailiff"])
+def test_alice_agent_cannot_reuse_a_scripted_live_name(
+    name: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seen: list[str | None] = []
+
+    def live_demo(evidence: Path = demo.EVIDENCE, alice_agent: str | None = None) -> int:
+        seen.append(alice_agent)
+        return 0
+
+    monkeypatch.setattr(demo, "run_live_demo", live_demo)
+    assert main(["--live", "--alice-agent", name]) == 2
+    assert f"error: --alice-agent {name} is a scripted pc-live name" in capsys.readouterr().out
+    assert seen == []
+
+
+def test_alice_agent_without_live_is_refused_and_exits_2(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["--offline", "--alice-agent", "alice-claude"]) == 2
+    assert "--alice-agent needs --live" in capsys.readouterr().out
+
+
 @pytest.fixture
 def live_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BAILIFF_BASE_URL", "http://127.0.0.1:8000")
@@ -150,7 +191,9 @@ def live_config(monkeypatch: pytest.MonkeyPatch) -> None:
 def _live_returning(receipt: dict[str, Any]) -> Any:
     """A stand-in for run_live: writes the receipt where the real run would, then returns it."""
 
-    async def live_run(base: str, token: str, evidence: Path) -> dict[str, Any]:
+    async def live_run(
+        base: str, token: str, evidence: Path, alice_agent: str | None = None
+    ) -> dict[str, Any]:
         save_receipt(receipt, str(evidence / "receipt.json"))
         return receipt
 
@@ -171,7 +214,9 @@ def test_a_live_failure_prints_the_reason_and_exits_1(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    async def refused(base: str, token: str, evidence: Path) -> dict[str, Any]:
+    async def refused(
+        base: str, token: str, evidence: Path, alice_agent: str | None = None
+    ) -> dict[str, Any]:
         raise failure
 
     monkeypatch.setattr(demo, "run_live", refused)

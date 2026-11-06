@@ -11,8 +11,10 @@ import httpx
 import pytest
 
 from bailiff import live
+from bailiff.events import REQ, RES, read_wire
 from bailiff.live import LiveError, _register, _Tap, room_id_from
-from bailiff.scripted.fake_room import FakeRoom
+from bailiff.scripted.fake_room import FakeConnection, FakeRoom
+from bailiff.scripted.runner import answer, fixture_runner
 from bailiff.transport import ReconnectExhausted, SwitchConnection
 
 
@@ -234,4 +236,144 @@ async def test_an_agent_that_never_connects_is_a_named_error(
     monkeypatch.setattr(live, "READY_TIMEOUT_S", 0.1)
     with pytest.raises(LiveError, match=r"did not connect within 0.1 s \(check agent keys"):
         await live.run_live("http://switch.test", "tok", tmp_path)
+    assert not (tmp_path / "receipt.json").exists()
+
+
+def _spy_on_serve(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Record the keyword arguments the live case is served with, then serve as usual."""
+    seen: dict[str, Any] = {}
+    real_serve = live.serve
+
+    async def spy(conn: Any, room_id: str, **kwargs: Any) -> dict[str, Any]:
+        seen.update(kwargs, conn=conn)
+        return await real_serve(conn, room_id, **kwargs)
+
+    monkeypatch.setattr(live, "serve", spy)
+    return seen
+
+
+@pytest.mark.asyncio
+async def test_default_run_keeps_the_scripted_alice_and_the_60_s_step(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen = _spy_on_serve(monkeypatch)
+    await asyncio.wait_for(live.run_live("http://switch.test", "tok", tmp_path), 30)
+    assert seen["machines"] == {"alice": "pc-live-alice", "bob": "pc-live-bob"}
+    assert seen["step_timeout"] == 60.0
+    assert "pc-live-alice" in {sender for sender, _ in live_room.messages}
+
+
+async def _claude(conn: FakeConnection, room: FakeRoom, forger: FakeConnection | None) -> None:
+    """Stands in for the Console Claude Code agent: prose around a reply block, as an LLM writes it.
+
+    The answers come from the scripted Alice's fixture, so only the sender differs. A `forger`
+    posts a reply under the same request id first, from another member of the room.
+    """
+    async for ev in conn.events():
+        if not (ev.text or "").startswith("@alice-claude "):
+            continue
+        req = read_wire(ev.text, REQ)
+        if req is None:
+            continue
+        if forger is not None:
+            forged = {"request_id": req["request_id"], "machine": "alice", "exit_code": 1}
+            await forger.post(room.room_id, f"@{live.BAILIFF} {RES} {json.dumps(forged)}")
+        reply = await answer(req, "alice", fixture_runner(live.FIXTURES / "alice.json"))
+        block = json.dumps(reply, sort_keys=True)
+        await conn.post(room.room_id, f"Here is the result.\n@{live.BAILIFF} {RES} {block}")
+
+
+async def _run_with_claude(
+    room: FakeRoom, tmp_path: Path, forger: FakeConnection | None = None
+) -> dict[str, Any]:
+    claude = _claude(room.join("alice-claude"), room, forger)
+    agent = asyncio.create_task(claude)
+    try:
+        return await asyncio.wait_for(
+            live.run_live("http://switch.test", "tok", tmp_path, alice_agent="alice-claude"), 30
+        )
+    finally:
+        agent.cancel()
+        await asyncio.gather(agent, return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_real_alice_is_addressed_by_her_handle_and_no_scripted_alice_joins(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen = _spy_on_serve(monkeypatch)
+    receipt = await _run_with_claude(live_room, tmp_path)
+    requests = [text for sender, text in live_room.messages if sender == live.BAILIFF]
+    assert any(text.startswith("@alice-claude BAILIFF-REQ ") for text in requests)
+    assert not any(text.startswith("@pc-live-alice") for text in requests)
+    assert "pc-live-alice" not in {sender for sender, _ in live_room.messages}
+    assert seen["machines"] == {"alice": "alice-claude", "bob": "pc-live-bob"}
+    assert seen["step_timeout"] == 300.0
+    assert receipt["baseline"]["outcome"] == "pass"
+
+
+@pytest.mark.asyncio
+async def test_real_alice_reply_forged_by_another_member_is_counted_and_ignored(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen = _spy_on_serve(monkeypatch)
+    receipt = await _run_with_claude(live_room, tmp_path, forger=live_room.join("mallory"))
+    assert seen["conn"].malformed >= 1
+    assert receipt["baseline"]["outcome"] == "pass"  # the forged exit 1 was not the answer
+
+
+@pytest.mark.asyncio
+async def test_real_alice_who_never_joins_is_a_named_error(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(live, "JOIN_TIMEOUT_S", 0.1)
+    cause = r"\(last: expected one room_join for alice-claude in the room, found 0\)"
+    with pytest.raises(
+        LiveError, match=rf"@alice-claude did not join the room within 0.1 s {cause}"
+    ):
+        await live.run_live("http://switch.test", "tok", tmp_path, alice_agent="alice-claude")
+    assert not (tmp_path / "receipt.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_real_alice_who_joins_late_is_waited_for_before_the_opening(
+    live_room: FakeRoom,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    real_sleep = asyncio.sleep
+
+    async def fast_sleep(_delay: float) -> None:
+        await real_sleep(0.01)  # the join poll sleeps 2 s; the test must not
+
+    seen_before_join: list[str] = []
+
+    async def join_late() -> None:
+        await real_sleep(0.05)  # at least one poll finds no join first
+        seen_before_join.extend(text for _, text in live_room.messages if text.startswith("!open"))
+        await _claude(live_room.join("alice-claude"), live_room, None)
+
+    monkeypatch.setattr(live.asyncio, "sleep", fast_sleep)
+    agent = asyncio.create_task(join_late())
+    try:
+        receipt = await asyncio.wait_for(
+            live.run_live("http://switch.test", "tok", tmp_path, alice_agent="alice-claude"), 30
+        )
+    finally:
+        agent.cancel()
+        await asyncio.gather(agent, return_exceptions=True)
+    assert seen_before_join == []
+    assert "Who can talk to your agent" in capsys.readouterr().out
+    assert receipt["baseline"]["outcome"] == "pass"
+
+
+@pytest.mark.asyncio
+async def test_real_alice_who_joins_but_never_replies_is_a_named_error(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    live_room.join("alice-claude")  # joined, but nothing reads her queue, so she never replies
+    monkeypatch.setattr(live, "REAL_CASE_TIMEOUT_S", 0.1)
+    with pytest.raises(LiveError, match="no receipt within"):
+        await live.run_live("http://switch.test", "tok", tmp_path, alice_agent="alice-claude")
     assert not (tmp_path / "receipt.json").exists()
