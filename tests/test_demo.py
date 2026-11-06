@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -12,6 +13,9 @@ import pytest
 from bailiff import demo
 from bailiff.ablation import NOT_ABLATED_MASKED
 from bailiff.demo import main
+from bailiff.live import LiveError
+from bailiff.models import StepResult
+from bailiff.receipt import save_receipt
 from bailiff.scripted.fake_room import FakeRoom
 
 
@@ -31,6 +35,7 @@ def test_offline_demo_tells_the_story_and_every_receipt_step_replays(
         "tz": "fail",
         "node": "pass",
         "node_options": "fail",
+        "fs_case (no-op)": "fail",
         "os (no-op)": "fail",
     }
     assert receipt["culprit"] == {"variable": "node", "evidence_step": "ablation-2"}
@@ -42,7 +47,7 @@ def test_offline_demo_tells_the_story_and_every_receipt_step_replays(
     assert all("auto-approved" in a["approval"] for a in receipt["attestations"])
     verdicts = {s["name"]: s["verdict"] for s in receipt["suspects"]}
     assert verdicts["os"] == "unknown"
-    assert "not ablated (no-op, verdict unknown): os" in out
+    assert "not ablated (no-op, verdict unknown): fs_case, os" in out
     privacy = [line for line in out.splitlines() if line.startswith("privacy: ")]
     assert len(privacy) == 1
     assert re.fullmatch(
@@ -120,14 +125,100 @@ def test_a_value_masked_suspect_is_named_on_its_own_line(
     assert "not ablated (no-op, verdict unknown): none" in out
 
 
-def test_live_mode_is_a_marked_todo_that_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
+def test_live_mode_without_config_names_what_is_missing_and_exits_2(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("BAILIFF_BASE_URL", raising=False)
+    monkeypatch.delenv("SWITCH_REGISTRATION_TOKEN", raising=False)
     assert main(["--live"]) == 2
-    assert (
-        "live Switch-room mode is the next step (register agents, then run)"
-        in capsys.readouterr().out
-    )
+    out = capsys.readouterr().out
+    assert "BAILIFF_BASE_URL and SWITCH_REGISTRATION_TOKEN" in out
+    assert "SIMULATED" not in out
 
 
 def test_running_with_no_mode_flag_refuses_and_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([]) == 2
-    assert "TODO" in capsys.readouterr().out
+    assert "choose a mode: --offline or --live" in capsys.readouterr().out
+
+
+@pytest.fixture
+def live_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BAILIFF_BASE_URL", "http://127.0.0.1:8000")
+    monkeypatch.setenv("SWITCH_REGISTRATION_TOKEN", "token-for-test")
+
+
+def _live_returning(receipt: dict[str, Any]) -> Any:
+    """A stand-in for run_live: writes the receipt where the real run would, then returns it."""
+
+    async def live_run(base: str, token: str, evidence: Path) -> dict[str, Any]:
+        save_receipt(receipt, str(evidence / "receipt.json"))
+        return receipt
+
+    return live_run
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        LiveError("server said no"),
+        ValueError("expected one room_join for pc-live-bob in the room, found 0"),
+    ],
+)
+def test_a_live_failure_prints_the_reason_and_exits_1(
+    failure: Exception,
+    live_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    async def refused(base: str, token: str, evidence: Path) -> dict[str, Any]:
+        raise failure
+
+    monkeypatch.setattr(demo, "run_live", refused)
+    assert demo.run_live_demo(tmp_path) == 1
+    assert f"error: {failure}" in capsys.readouterr().out
+
+
+def test_a_live_run_that_replays_in_full_exits_0(
+    live_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    receipt, _ = asyncio.run(demo.run_offline())
+    monkeypatch.setattr(demo, "run_live", _live_returning(receipt))
+    assert demo.run_live_demo(tmp_path) == 0
+    out = capsys.readouterr().out
+    assert "LIVE: running against a real Switch server" in out
+    assert "replay: 5/5 steps matched (fixture replay, not Docker)" in out
+
+
+def test_a_live_replay_mismatch_exits_1(
+    live_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    receipt, _ = asyncio.run(demo.run_offline())
+    monkeypatch.setattr(demo, "run_live", _live_returning(receipt))
+    missed = StepResult(id="ablation-1", exit_code=1, outcome="fail", matched=False)
+    monkeypatch.setattr(demo, "replay", lambda path, runner_fn: [missed])
+    assert demo.run_live_demo(tmp_path) == 1
+    assert "replay: 0/1 steps matched" in capsys.readouterr().out
+
+
+def test_a_live_receipt_that_fails_validation_is_a_named_error(
+    live_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    receipt, _ = asyncio.run(demo.run_offline())
+    monkeypatch.setattr(demo, "run_live", _live_returning(receipt))
+
+    def invalid(path: str, runner_fn: object) -> list[StepResult]:
+        raise ValueError("invalid receipt: receipt.steps: must contain at least one step")
+
+    monkeypatch.setattr(demo, "replay", invalid)
+    assert demo.run_live_demo(tmp_path) == 1
+    assert "error: invalid receipt: receipt.steps" in capsys.readouterr().out

@@ -1,0 +1,201 @@
+"""Live mode: one ParityCourt case run on a real Switch server.
+
+    BAILIFF_BASE_URL=http://127.0.0.1:8000 SWITCH_REGISTRATION_TOKEN=... \
+        python -m bailiff.demo --live
+
+Registers the Bailiff and both machine agents under pc-live-* names (a re-run rotates only those
+keys), opens a room with the Bailiff's key, and runs the case over real WebSockets. Alice and Bob
+are scripted: they answer from the canned fixtures, so the receipt can be replayed against Bob's
+fixture. Agent keys stay in memory; never printed or saved.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import uuid
+from collections.abc import AsyncIterator
+from pathlib import Path
+from typing import Any
+
+import httpx
+import websockets
+
+from bailiff.agent import serve
+from bailiff.events import Event
+from bailiff.receipt import save_receipt
+from bailiff.redact import mask_bounded
+from bailiff.scripted.runner import fixture_runner, serve_machine
+from bailiff.transport import SwitchConnection
+
+FIXTURES = Path(__file__).parent / "scripted" / "fixtures"
+BAILIFF = "pc-live-bailiff"
+LIVE = {"alice": "pc-live-alice", "bob": "pc-live-bob"}
+# The trigger is matched by phrase (agent.TRIGGERS), so the opener does not name the Bailiff.
+OPENING = "!open case export-service 500 AuthVerifierError on Ubuntu, passes on the Mac"
+CASE_TIMEOUT_S = 180.0
+READY_TIMEOUT_S = 10.0
+
+
+class LiveError(Exception):
+    """The live server refused a call or returned an unusable reply."""
+
+
+def _register_body(name: str) -> dict[str, Any]:
+    return {
+        "name": name,
+        "description": "ParityCourt live demo",
+        "connector_type": "custom",
+        "integration_profile": {
+            "connection_model": "always_on",
+            "message_exchange": True,
+            "pre_invocation_mediation": [],
+            "post_invocation_mediation": [],
+            "event_reporting": [],
+        },
+    }
+
+
+async def _register(http: httpx.AsyncClient, name: str) -> tuple[str, str]:
+    body = _register_body(name)
+    resp = await http.post("/agents", json=body)
+    if resp.status_code == 409:  # already registered: rotate the key
+        resp = await http.post("/agents", json={**body, "overwrite": True})
+    if not resp.is_success:
+        raise LiveError(f"register {name} failed with HTTP {resp.status_code}: {resp.text[:200]}")
+    data = resp.json()
+    if not isinstance(data, dict) or not {"id", "api_key"} <= data.keys():
+        raise LiveError(f"register {name} reply had no id or api_key")
+    return str(data["id"]), str(data["api_key"])
+
+
+def room_id_from(reply: dict[str, Any]) -> str:
+    result = reply.get("result")
+    room_id = result.get("id") if isinstance(result, dict) else None
+    if not isinstance(room_id, str):
+        raise LiveError(f"create_room reply has no room id: {str(reply)[:200]}")
+    return room_id
+
+
+async def _create_room(base: str, bailiff: tuple[str, str], names: list[str]) -> str:
+    """create_room needs an open connection, so the Bailiff opens one with no room claimed yet."""
+    agent_id, key = bailiff
+    cid = str(uuid.uuid4())
+    auth = {"Authorization": f"Bearer {key}"}
+    scheme_base = base.replace("http", "ws", 1)  # http->ws, https->wss
+    url = f"{scheme_base}/agents/{agent_id}/connection/ws?connection_id={cid}&filter=all&rooms="
+    async with websockets.connect(url, additional_headers=auth) as ws:
+        try:
+            async with asyncio.timeout(READY_TIMEOUT_S):
+                await ws.recv()  # connection_state: ops are refused until the socket is open
+        except TimeoutError:
+            raise LiveError(
+                f"no connection_state from Switch within {READY_TIMEOUT_S:g} s"
+                " (check agent keys / server)"
+            ) from None
+        async with httpx.AsyncClient(base_url=base, timeout=10) as http:
+            resp = await http.post(
+                f"/agents/{agent_id}/ops/create_room",
+                headers={**auth, "X-Switch-Connection-Id": cid},
+                json={
+                    "name": f"paritycourt-live-{uuid.uuid4().hex[:8]}",
+                    "description": "ParityCourt live case",
+                    "agent_names": names,
+                    "internal_only": True,
+                },
+            )
+    if not resp.is_success:
+        raise LiveError(f"create_room failed with HTTP {resp.status_code}: {resp.text[:200]}")
+    return room_id_from(resp.json())
+
+
+class _Tap:
+    """The Bailiff's connection, with a masked copy of each room message kept for the transcript."""
+
+    def __init__(self, conn: SwitchConnection, transcript: list[str]) -> None:
+        self._conn = conn
+        self._transcript = transcript
+
+    @property
+    def malformed(self) -> int:
+        return self._conn.malformed
+
+    @malformed.setter
+    def malformed(self, value: int) -> None:
+        self._conn.malformed = value
+
+    async def events(self) -> AsyncIterator[Event]:
+        async for ev in self._conn.events():
+            if ev.text is not None:
+                name = ev.sender_name or "unknown"
+                self._transcript.append(f"[{name}] {mask_bounded(ev.text)[0]}")
+            yield ev
+
+    async def op(self, operation: str, /, **args: Any) -> dict[str, Any]:
+        return await self._conn.op(operation, **args)
+
+    async def post(self, room_id: str, text: str) -> int:
+        return await self._conn.post(room_id, text)
+
+
+async def run_live(base: str, token: str, evidence: Path) -> dict[str, Any]:
+    """Run one case on `base`; writes transcript.txt and receipt.json to `evidence`."""
+    headers = {"Authorization": f"Bearer {token}"}
+    async with httpx.AsyncClient(base_url=base, timeout=10, headers=headers) as http:
+        keys = {name: await _register(http, name) for name in (BAILIFF, *LIVE.values())}
+    room = await _create_room(base, keys[BAILIFF], [BAILIFF, *LIVE.values()])
+    print(f"room: {room}")
+
+    def connect(agent: str) -> SwitchConnection:
+        agent_id, key = keys[agent]
+        return SwitchConnection(base, agent_id, key, str(uuid.uuid4()), [room])
+
+    transcript: list[str] = []
+    async with (
+        connect(BAILIFF) as bailiff,
+        connect(LIVE["alice"]) as alice,
+        connect(LIVE["bob"]) as bob,
+    ):
+        machines = [
+            asyncio.create_task(
+                serve_machine(
+                    alice,
+                    room,
+                    "alice",
+                    LIVE["alice"],
+                    fixture_runner(FIXTURES / "alice.json"),
+                    BAILIFF,
+                )
+            ),
+            asyncio.create_task(
+                serve_machine(
+                    bob, room, "bob", LIVE["bob"], fixture_runner(FIXTURES / "bob.json"), BAILIFF
+                )
+            ),
+        ]
+        case = asyncio.create_task(serve(_Tap(bailiff, transcript), room, machines=LIVE))
+        try:
+            # The opening must not go out before every socket is subscribed (start_from=head).
+            try:
+                async with asyncio.timeout(READY_TIMEOUT_S):
+                    while any(c.generation is None for c in (bailiff, alice, bob)):
+                        await asyncio.sleep(0.05)
+            except TimeoutError:
+                raise LiveError(
+                    f"agents did not connect within {READY_TIMEOUT_S:g} s"
+                    " (check agent keys / server)"
+                ) from None
+            await bob.post(room, OPENING)
+            try:
+                receipt = await asyncio.wait_for(case, CASE_TIMEOUT_S)
+            except TimeoutError:
+                raise LiveError(
+                    f"no receipt within {CASE_TIMEOUT_S:.0f} s: the case stalled"
+                ) from None
+        finally:
+            for task in (*machines, case):
+                task.cancel()
+            await asyncio.gather(*machines, case, return_exceptions=True)
+    evidence.mkdir(parents=True, exist_ok=True)
+    (evidence / "transcript.txt").write_text("\n".join(transcript) + "\n", encoding="utf-8")
+    save_receipt(receipt, str(evidence / "receipt.json"))
+    return receipt

@@ -34,6 +34,10 @@ def _machine(
 ) -> Path:
     data = json.loads((FIXTURES / base).read_text(encoding="utf-8"))
     data["commands"]["printenv NODE_OPTIONS"]["stdout"] = f"{node_options}\n"
+    if base == "alice.json":  # Bob built from Alice's host: his own probes answer as hers do
+        data["commands"]["stat -f -c %T ."] = {"exit_code": 0, "stdout": "msdos\n"}
+        shasum = data["commands"]["shasum -a 256 package-lock.json"]
+        data["commands"]["sha256sum package-lock.json"] = shasum
     if test is not None:
         data["commands"]["node test.js"] = test
     path = tmp_path / name

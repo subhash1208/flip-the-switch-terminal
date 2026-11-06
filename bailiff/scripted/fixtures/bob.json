@@ -16,6 +16,11 @@
       "stdout": "",
       "stderr": "TypeError: [].toSorted is not a function\n    at test.js:3:12\n"
     },
-    "/opt/node22/bin/node test.js": {"exit_code": 0, "stdout": "suite: 4 passed\n"}
+    "/opt/node22/bin/node test.js": {"exit_code": 0, "stdout": "suite: 4 passed\n"},
+    "stat -f -c %T .": {"exit_code": 0, "stdout": "ext2/ext3\n"},
+    "sha256sum package-lock.json": {
+      "exit_code": 0,
+      "stdout": "4c1e0a9d7b3f5e28a6c04d9b1f7e3a52c8d6b09e4f2a7c1d5e8b3f6a9c0d2e7  package-lock.json\n"
+    }
   }
 }

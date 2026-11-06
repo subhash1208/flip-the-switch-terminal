@@ -1,0 +1,49 @@
+[pc-live-bob] !open case export-service 500 AuthVerifierError on Ubuntu, passes on the Mac
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "alice", "request_id": "74a26f5a7dd3484c88a7a64d1c6d4324", "stderr": "", "stdout": "Darwin [redacted:host] 24.5.0 Darwin Kernel Version 24.5.0 arm64\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "alice", "request_id": "fefff9b4deb34732b2a9dca2aa57676c", "stderr": "", "stdout": "v22.11.0\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "alice", "request_id": "d9ec3f75eaf049979408beaeb1354312", "stderr": "", "stdout": "Europe/London\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "alice", "request_id": "e5819d3e1e8d4e9d9f203b3122198a86", "stderr": "", "stdout": "--max-old-space-size=4096\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "alice", "request_id": "7162dfa15f694f7bb1c86e5b4a4ea2b4", "stderr": "", "stdout": "true\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "alice", "request_id": "4c537590c42540a4b731e312b0a10ec7", "stderr": "", "stdout": "   File System Personality:  APFS\n   Type (Bundle):  apfs\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "alice", "request_id": "7cd15cf06755492189490d6aafd24b38", "stderr": "", "stdout": "4c1e0a9d7b3f5e28a6c04d9b1f7e3a52c8d6b09e4f2a7c1d5e8b3f6a9c0d2e7  package-lock.json\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "bob", "request_id": "d392d95bead94d339f8fa77198ce88fc", "stderr": "", "stdout": "Linux [redacted:host] 6.8.0-45-generic #45-Ubuntu SMP x86_64 GNU/Linux\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "bob", "request_id": "bcc83caf679447ad977ca1cebdfc5b1b", "stderr": "", "stdout": "v18.20.4\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "bob", "request_id": "7aaf3635fe394b108a78616b517cf8a4", "stderr": "", "stdout": "UTC\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "bob", "request_id": "4bda219a84334457a0e9efbd1ce520ce", "stderr": "", "stdout": "--max-old-space-size=2048\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "bob", "request_id": "6170c0379546447a8ebb04045211eea0", "stderr": "", "stdout": "HOME=/home/[redacted:user]\nUSER=[redacted:user]\nHOSTNAME=[redacted:host]\nEMAIL=[redacted:email]\nSSH_CLIENT=[redacted:ip] 40022 22\nPATH=/usr/bin:/bin\nTZ=UTC\nNODE_OPTIONS=--max-old-space-size=2048\nDATABASE_PASSWORD=[redacted]\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "bob", "request_id": "88354308a64d4c3fb720e2b84c48247d", "stderr": "", "stdout": "ext2/ext3\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "probe", "machine": "bob", "request_id": "3b20aaec125c4a2a93294eb72351658b", "stderr": "", "stdout": "4c1e0a9d7b3f5e28a6c04d9b1f7e3a52c8d6b09e4f2a7c1d5e8b3f6a9c0d2e7  package-lock.json\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "test", "machine": "alice", "request_id": "3f9dedd1674a44a7a2a66e1f8966cfa3", "stderr": "", "stdout": "suite: 4 passed\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 1, "kind": "test", "machine": "bob", "request_id": "266cd2b01ac94abc918de3be40e33b4c", "stderr": "TypeError: [].toSorted is not a function\n    at test.js:3:12\n", "stdout": ""}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 1, "kind": "ablation", "machine": "bob", "request_id": "121a3143a35344d1baa3868308a63ca1", "stderr": "TypeError: [].toSorted is not a function\n    at test.js:3:12\n", "stdout": ""}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "ablation", "machine": "bob", "request_id": "eb9b4d2128604558baf37acdf0c467b0", "stderr": "", "stdout": "suite: 4 passed\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 1, "kind": "ablation", "machine": "bob", "request_id": "c3d663326fd64a8b87abbd9ad2d8b7c8", "stderr": "TypeError: [].toSorted is not a function\n    at test.js:3:12\n", "stdout": ""}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 1, "kind": "ablation", "machine": "bob", "request_id": "967a0f7c83c144798b57f85a9d2c878f", "stderr": "TypeError: [].toSorted is not a function\n    at test.js:3:12\n", "stdout": ""}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 1, "kind": "ablation", "machine": "bob", "request_id": "77c3171a0dbd419498baf03ec0a98863", "stderr": "TypeError: [].toSorted is not a function\n    at test.js:3:12\n", "stdout": ""}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": 0, "kind": "verify", "machine": "bob", "request_id": "0172478c5d3945028e88496157815738", "stderr": "", "stdout": "suite: 4 passed\n"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-alice] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": null, "kind": "attest", "machine": "alice", "request_id": "ba20346ab7d3496b8292321abee8781e"}
+APPROVAL: auto-approved (scripted agent, no human)
+[pc-live-bob] @pc-live-bailiff BAILIFF-RES {"approval": "APPROVAL: auto-approved (scripted agent, no human)", "exit_code": null, "kind": "attest", "machine": "bob", "request_id": "f2072a8c53eb4c8fa5f3eeab4ba7ceab"}
+APPROVAL: auto-approved (scripted agent, no human)

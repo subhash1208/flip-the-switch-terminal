@@ -12,7 +12,8 @@ Environment (values are never logged):
     ROOM_ID                the room to claim and work in
     RECEIPT_PATH           where receipt.json is written (default ./receipt.json)
     ALICE_HANDLE, BOB_HANDLE   machine agents' handles (default alice-claude, bob-codex)
-    STEP_TIMEOUT           seconds to wait for each machine reply (default 60)
+    STEP_TIMEOUT           seconds to wait for each machine reply (default 60; live runs with a
+                           human approving each probe should set 300)
     BAILIFF_TURN_CAP       optional whole number; past it the case stops and an inconclusive
                            receipt is written (default off)
 
@@ -43,18 +44,31 @@ from bailiff.models import StepResult, Suspect
 from bailiff.receipt import build_receipt, save_receipt, step_to_dict, validate_receipt
 from bailiff.redact import mask_bounded, mask_secret_lines, redact
 from bailiff.state import CaseState, TurnCapExceeded
-from bailiff.transport import ReconnectExhausted, SwitchConnection, TakenOver
+from bailiff.transport import ReconnectExhausted, SwitchConnection, SwitchRefused, TakenOver
 
 MACHINES = {"alice": "alice-claude", "bob": "bob-codex"}
 PROBES: dict[str, list[str]] = {
     "uname": ["uname", "-a"],
     "node": ["node", "-v"],
-    "env": ["env"],
-    "ignorecase": ["git", "config", "core.ignorecase"],
     "tz": ["printenv", "TZ"],
     "node_options": ["printenv", "NODE_OPTIONS"],
 }
+# Each machine also runs its own OS's probes: diskutil and shasum are macOS only, stat -f and
+# sha256sum are Linux only.
+MACHINE_PROBES: dict[str, dict[str, list[str]]] = {
+    "alice": {
+        "ignorecase": ["git", "config", "core.ignorecase"],
+        "diskutil": ["diskutil", "info", "/"],
+        "shasum": ["shasum", "-a", "256", "package-lock.json"],
+    },
+    "bob": {
+        "env": ["env"],
+        "stat": ["stat", "-f", "-c", "%T", "."],
+        "sha256sum": ["sha256sum", "package-lock.json"],
+    },
+}
 TEST_CMD = ["node", "test.js"]
+# Live runs wait on a human approving each probe: set STEP_TIMEOUT=300 for them.
 STEP_TIMEOUT = 60.0
 TRIGGERS = ("!open case", "@bailiff open case")
 DOC_NOTE = "Case file kept by the Bailiff. Only the Bailiff edits it."
@@ -81,6 +95,7 @@ class _Ctx:
     state: CaseState
     inbox: Inbox
     machines: dict[str, str]
+    ids: dict[str, str]
     probes: dict[str, list[str]]
     test_cmd: list[str]
     timeout: float
@@ -95,7 +110,7 @@ async def _pump(conn: Conn, inbox: Inbox, transcript: list[tuple[str, str]]) -> 
     try:
         async for ev in conn.events():
             if ev.text is not None:
-                transcript.append((ev.sender or "unknown", mask_bounded(ev.text)[0]))
+                transcript.append((ev.sender_name or "unknown", mask_bounded(ev.text)[0]))
             inbox.put_nowait(ev)
     except Exception as exc:  # e.g. TakenOver: hand it to the flow so it stops
         inbox.put_nowait(exc)
@@ -124,6 +139,37 @@ def _trigger_title(ev: Event) -> str | None:
     return None
 
 
+async def _participant_ids(conn: Conn, room_id: str, machines: dict[str, str]) -> dict[str, str]:
+    """Each machine's opaque participant id, from the room_join Switch wrote when it joined.
+
+    Switch writes the join, so the id is not the agent's to choose. The display name only picks
+    the record; a handle with no join, or with two distinct ids, stops the case.
+    Observed on Switch 0.31.0, undocumented (docs name member/member_name); joins outside the
+    read_context window raise "found 0", and an impostor join inside the window while the real
+    one fell out is accepted (to be verified).
+    """
+    result = (await conn.op("read_context", room_id=room_id)).get("result")
+    threads = result.get("threads") if isinstance(result, dict) else None
+    joins: dict[str, set[str]] = {}
+    for thread in threads if isinstance(threads, list) else []:
+        ev = thread.get("root") if isinstance(thread, dict) else None
+        if (
+            isinstance(ev, dict)
+            and ev.get("kind") == "room_join"
+            and isinstance(ev.get("sender"), str)
+        ):
+            joins.setdefault(str(ev.get("sender_name")), set()).add(ev["sender"])
+    ids: dict[str, str] = {}
+    for machine, handle in machines.items():
+        found = joins.get(handle, set())
+        if len(found) != 1:
+            raise ValueError(f"expected one room_join for {handle} in the room, found {len(found)}")
+        ids[machine] = next(iter(found))
+    if len(set(ids.values())) != len(ids):
+        raise ValueError("two machines resolved to the same participant id")
+    return ids
+
+
 def _suspect_dict(s: Suspect) -> dict[str, Any]:
     return {
         "name": s.name,
@@ -149,17 +195,32 @@ def _not_run(machine: str, cmd: list[str]) -> dict[str, Any]:
     }
 
 
+def _doc_id(reply: dict[str, Any]) -> str:
+    """UNVERIFIED: the create reply shape is not documented; accept the likely places for the id."""
+    result = reply.get("result")
+    for source in (reply, result if isinstance(result, dict) else {}):
+        for key in ("document_id", "id"):
+            if isinstance(source.get(key), str) and source[key]:
+                return str(source[key])
+    raise ValueError(f"create_room_document reply has no document id; reply keys: {sorted(reply)}")
+
+
 async def _write_doc(ctx: _Ctx) -> None:
-    """Create the case file once, then update it. Only this agent may edit a document it created."""
+    """Create the case file once, then update it by id. Only this agent edits it."""
     s = ctx.state
     text, hits = redact(s.to_room_document())
     s.doc_redactions = hits
-    name = f"case-{s.case_id}"
-    if s.doc_created:
-        await ctx.conn.op("update_room_document", name=name, content=text)
+    if s.doc_id is None:
+        reply = await ctx.conn.op(
+            "create_room_document",
+            name=f"case-{s.case_id}",
+            description="ParityCourt case file",
+            instructions=DOC_NOTE,
+            content=text,
+        )
+        s.doc_id = _doc_id(reply)
     else:
-        await ctx.conn.op("create_room_document", name=name, content=text, instructions=DOC_NOTE)
-        s.doc_created = True
+        await ctx.conn.op("update_room_document", document_id=s.doc_id, content=text)
 
 
 async def _advance(ctx: _Ctx, new: str) -> None:
@@ -193,14 +254,14 @@ async def _ask(
         async with asyncio.timeout(ctx.timeout):
             while True:
                 ev = await _next(ctx.inbox)
-                reply = read_wire(ev.text, RES)
+                reply = read_wire(ev.text, RES, ("request_id", "exit_code"))
                 if not (
                     reply
                     and reply.get("request_id") == request_id
                     and reply.get("machine") == machine
                 ):
                     continue
-                if ev.sender == ctx.machines[machine]:
+                if ev.sender == ctx.ids[machine]:
                     return ev, reply
                 ctx.conn.malformed += 1  # a reply from anyone but that machine's own agent
     except TimeoutError:
@@ -271,7 +332,7 @@ async def _fingerprint(
     raw: dict[str, dict[str, Any]] = {}
     for machine in ctx.machines:
         collected: dict[str, str] = {}
-        for name, argv in ctx.probes.items():
+        for name, argv in {**ctx.probes, **MACHINE_PROBES.get(machine, {})}.items():
             out = await _probe(ctx, machine, name, argv)
             if out is not None:
                 collected[" ".join(argv)] = out
@@ -338,7 +399,7 @@ async def _attest(ctx: _Ctx) -> None:
         ctx.state.attestations.append(
             {
                 "machine": machine,
-                "owner": ev.sender or "unknown",
+                "owner": ev.sender_name or "unknown",
                 "at": datetime.now(UTC).isoformat(timespec="seconds"),
                 "approval_message_id": message_id(ev),
                 "approval": approval if isinstance(approval, str) else None,
@@ -424,12 +485,15 @@ async def serve(
                 case_id=f"case-{uuid.uuid4().hex[:8]}",
                 room_id=room_id,
                 title=title,
-                opened_by=ev.sender or "unknown",
+                opened_by=ev.sender_name or "unknown",
                 turn_cap=turn_cap,
                 simulated=simulated,
                 transcript=transcript,
             )
-            return await _run(_Ctx(conn, state, inbox, machines, probes, test_cmd, step_timeout))
+            ids = await _participant_ids(conn, room_id, machines)
+            return await _run(
+                _Ctx(conn, state, inbox, machines, ids, probes, test_cmd, step_timeout)
+            )
     finally:
         await _stop(pump)
 
@@ -447,7 +511,8 @@ async def run_case(
     inbox: Inbox = asyncio.Queue()
     pump = asyncio.create_task(_pump(conn, inbox, state.transcript))
     try:
-        return await _run(_Ctx(conn, state, inbox, machines, probes, test_cmd, step_timeout))
+        ids = await _participant_ids(conn, state.room_id, machines)
+        return await _run(_Ctx(conn, state, inbox, machines, ids, probes, test_cmd, step_timeout))
     finally:
         await _stop(pump)
 
@@ -485,7 +550,7 @@ async def _main_async() -> int:
     except ReconnectExhausted as exc:
         print(f"giving up: {exc}")
         return 1
-    except ValueError as exc:
+    except (ValueError, SwitchRefused) as exc:
         print(f"error: {exc}")
         return 1
     path = Path(os.environ.get("RECEIPT_PATH", "receipt.json"))

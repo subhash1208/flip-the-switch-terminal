@@ -194,7 +194,13 @@ async def test_non_2xx_call_raises_op_error_and_sends_the_bearer_key() -> None:
 
     async with _conn(FakeDial([]), transport=httpx.MockTransport(handler)) as conn:
         with pytest.raises(OpError) as err:
-            await conn.op("create_room_document", name="case-1", content="x")
+            await conn.op(
+                "create_room_document",
+                name="case-1",
+                description="d",
+                instructions="i",
+                content="x",
+            )
     assert err.value.status == 409
     assert seen == {"auth": "Bearer secret-key", "connection": "conn-1"}
 
@@ -289,3 +295,39 @@ async def test_a_connection_that_stayed_up_long_enough_resets_the_reconnect_cap(
             if len(cursors) == 4:
                 break
     assert cursors == [1, 2, 3, 4]
+
+
+def _gap(resumed_at: int) -> str:
+    data = {"from_sequence": 2, "resumed_at": resumed_at, "rooms": ["r1"], "reason": "window"}
+    return json.dumps({"event": "gap", "data": data})
+
+
+@pytest.mark.asyncio
+async def test_gap_moves_the_cursor_to_resumed_at_even_backwards_and_is_counted() -> None:
+    conn = _conn(FakeDial([FakeWS([_msg(12), _gap(5), _gap(20)])]))
+    cursors: list[int | None] = []
+    async with conn, aclosing(conn.events()) as stream:
+        async for _ in stream:
+            cursors.append(conn.cursor)
+            if len(cursors) == 3:
+                break
+    assert cursors == [12, 5, 20]
+    assert conn.gaps == 2
+
+
+@pytest.mark.asyncio
+async def test_closed_eviction_is_terminal_and_carries_the_reason() -> None:
+    data = {"code": "closed", "reason": "agent deleted"}
+    evicted = json.dumps({"event": "evicted", "data": data})
+    dial = FakeDial([FakeWS([evicted])])
+    conn = _conn(dial)
+    async with conn, aclosing(conn.events()) as stream:
+        with pytest.raises(SwitchRefused, match="agent deleted"):
+            async for _ in stream:
+                pass
+    assert len(dial.urls) == 1
+
+
+def test_an_empty_rooms_list_fails_loudly_before_any_connection() -> None:
+    with pytest.raises(ValueError, match="at least one room"):
+        SwitchConnection("http://switch.test", "agent-1", "secret-key", "conn-1", [])

@@ -52,7 +52,9 @@ def _compared(probe: Callable[[str], str]) -> dict[str, Any]:
         "tz": probe("printenv TZ"),
         "node_options": probe("printenv NODE_OPTIONS") or None,
         "fs_case": _fs_case(probe("stat -f -c %T ."), probe("diskutil info /")),
-        "lock_sha": _first_token(probe("sha256sum package-lock.json")),
+        "lock_sha": _first_token(
+            probe("sha256sum package-lock.json") or probe("shasum -a 256 package-lock.json")
+        ),
     }
 
 

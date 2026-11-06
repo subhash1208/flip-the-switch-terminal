@@ -39,7 +39,7 @@ class CaseState:
     inconclusive_reason: str | None = None
     created_at: str = field(default_factory=_now)
     state: str = "opened"
-    doc_created: bool = False
+    doc_id: str | None = None
     turns: int = 0
     redactions: int = 0
     doc_redactions: int = 0

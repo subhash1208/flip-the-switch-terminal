@@ -130,7 +130,13 @@ async def test_the_case_runs_on_masked_bundles_and_nothing_personal_is_written(
 
     for raw in RAW_PII:
         assert raw.lower() not in written
-    assert [s["name"] for s in receipt["suspects"]] == ["tz", "node", "node_options", "os"]
+    assert [s["name"] for s in receipt["suspects"]] == [
+        "tz",
+        "node",
+        "node_options",
+        "fs_case",
+        "os",
+    ]
     assert receipt["culprit"]["variable"] == "node"
     assert receipt["fix"]["outcome"] == "pass"
     assert '"DB_PASSWORD": "[redacted]"' in doc
