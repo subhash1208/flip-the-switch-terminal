@@ -30,3 +30,6 @@ build/
 .coverage
 coverage.xml
 htmlcov/
+
+# Local archive tooling
+.archify/

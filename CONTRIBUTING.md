@@ -235,16 +235,13 @@ This repo has session hooks that read a shared knowledge graph at session start 
 - The Claude Code `SessionStart` hook runs a Python script. It tries `python3` then falls back to `python`, so you need **Python 3.10+** reachable under one of those names. Verify: `python3 --version` (macOS/Linux) or `python --version` (Windows). On macOS, `python3` is the reliable name — bare `python` often does not exist.
 - The Claude hook command uses POSIX shell syntax (`||`, `$CLAUDE_PROJECT_DIR`). On Windows this needs **Git Bash** (ships with Git). Without it, Claude falls back to PowerShell and the hook breaks.
 
-**2. Fix the memory file path for YOUR machine (critical).**
-`.kiro/settings/mcp.json` and `.claude/mcp.json` both set:
+**2. Set the memory file path for YOUR machine (critical).**
+`.mcp.json` and `.claude/mcp.json` read `MEMORY_FILE_PATH` from your environment and fall back to a placeholder:
 ```json
-"MEMORY_FILE_PATH": "d:/Projects/flip-the-switch-terminal/switch-hackathon-knowledge-graph.jsonl"
+"MEMORY_FILE_PATH": "${MEMORY_FILE_PATH:-/path/to/flip-the-switch-terminal/switch-hackathon-knowledge-graph.jsonl}"
 ```
-That is an absolute Windows path and is correct **only on the machine that committed it**. There is no portable variable that works across Kiro + Claude on every OS (`${workspaceFolder}` is VS-Code-only; `${CLAUDE_PROJECT_DIR}` is not reliably expanded inside MCP env blocks). So each person must edit both files to point at the `switch-hackathon-knowledge-graph.jsonl` in **their own checkout**, e.g. on macOS:
-```json
-"MEMORY_FILE_PATH": "/Users/santhan/Projects/flip-the-switch-terminal/switch-hackathon-knowledge-graph.jsonl"
-```
-Do NOT commit your local path back over someone else's. If this is wrong, the memory server starts but reads an empty/other graph, so `open_nodes(["user-preferences"])` returns nothing and the Hex/Boss preferences never load.
+Set the variable to the absolute path of the `switch-hackathon-knowledge-graph.jsonl` in **your own checkout** (e.g. `export MEMORY_FILE_PATH="/Users/you/projects/flip-the-switch-terminal/switch-hackathon-knowledge-graph.jsonl"`, or the Windows user environment variables), then restart the client. A relative value is wrong: it resolves inside the npm package and reads an empty graph. `.kiro/settings/mcp.json` has no such fallback: edit its value locally, and do not commit your path into it.
+Do NOT commit a personal path into any of these files. If this is wrong, the memory server starts but reads an empty/other graph, so `open_nodes(["user-preferences"])` returns nothing and the Hex/Boss preferences never load.
 
 **3. Memory MCP permission (Kiro only).**
 Kiro stores MCP permissions per-user, not in the repo — see "Kiro Permissions Setup" above; the `memory/search_nodes` and `memory/open_nodes` allow rules are what let the read hook run without a prompt. Claude Code already has these allowed in the committed `.claude/settings.json`.
