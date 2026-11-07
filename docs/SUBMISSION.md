@@ -41,7 +41,7 @@ ParityCourt: each machine's agent testifies in one Switch room, and a referee is
 ```text
 ParityCourt settles "works on my machine" with evidence. A bug case runs in one Switch room with three participants: @alice-claude on Alice's machine, Bob's agent on the failing machine, and @bailiff, a custom Python referee that runs the case.
 
-Switch is the foundation, not a thin wrapper. The room is the case file, and the Bailiff creates the room document, because only the agent that creates a room document may edit it. Each agent has its own connection id and receives room events over a WebSocket; it answers through Switch's HTTP API. Each owner approves probes on their own machine. Delete Switch and the agents cannot see each other's machines or share a case file.
+Switch is the foundation, not a thin wrapper. The room is the case file, and the Bailiff creates the room document, because only the agent that creates a room document may edit it. Each agent has its own connection id and receives room events over a WebSocket; it answers through Switch's HTTP API. Each machine's owner approves probes on that machine. Delete Switch and the agents cannot see each other's machines or share a case file.
 
 What we built is the Bailiff, a deterministic referee, not an LLM:
 - It runs only allow-listed probes, such as uname -a, node -v and env.
@@ -60,13 +60,13 @@ The offline demo runs the full flow on canned output, with no keys and no Docker
 
 What is real: the Bailiff's WebSocket and HTTP transport to a self-hosted Switch 0.31.0 server (`python -m bailiff.agent`), merged to main as PR #9 (commit 31d7c57). It ran against a real Switch 0.31.0 server; the transcript is `docs/evidence/transcript.txt`. Also real: the redaction, fingerprint diff, ablation planner, receipt writer and replay code, and the Node 18 vs Node 22 failure in the sample app.
 
-What is scripted: the offline demo (`python -m bailiff.demo --offline`) runs an in-memory room with canned agent output, and it must say SIMULATED on screen. In the recorded live run (`docs/evidence/transcript.txt`), Alice and Bob are scripted: every approval reads `auto-approved (scripted agent, no human)`.
+What is scripted: the offline demo (`python -m bailiff.demo --offline`) runs an in-memory room with canned agent output, and it must say SIMULATED on screen. In the recorded live run (`docs/evidence/transcript.txt`), Alice and Bob are scripted: every approval reads `auto-approved (scripted agent, no human)`. A later live run, with `--alice-agent alice-claude`, had a real Claude Code Alice on a Mac; Bob stayed scripted. That run is not the recorded transcript, so the video must show it.
 
-Bob's handle is `@bob-codex`, a handle only. A real Bob would run Claude Code, which is in progress. Until then, the fallback is the scripted Bob container on Node 18. Real Claude Code Alice and Bob are not claimed anywhere in this kit.
+Bob's handle is `@bob-codex`, a handle only. A real Bob would run Claude Code, which is in progress. Until then, the fallback is the scripted Bob container on Node 18. Real Claude Code Bob is not claimed anywhere in this kit. Real Claude Code Alice is claimed only as verified in a live run (not in the repo transcript); show it in the video.
 
-Tick a box only if the demo video shows that agent real. The transcript shows scripted agents, so leave both unticked for it:
+Tick a box only if the demo video shows that agent real. The recorded transcript shows scripted agents, so it does not tick either box. Leave both unticked until the video is recorded:
 
-[ ] real Alice  [ ] real Bob
+[ ] real Alice (verified in a live run; show it in the video)  [ ] real Bob (not done)
 
 ---
 
@@ -87,8 +87,8 @@ python -m bailiff.demo --offline
 
 ## 5. Stats
 
-- **579 tests**, from `python -m pytest -q --cov=bailiff --cov-branch` (572 on main, plus 7 new preflight tests).
-- **94% branch coverage**, against a CI gate of 90%.
+- **603 tests**, from `python -m pytest -q`.
+- **95% branch coverage**, against a CI gate of 90%.
 - **8 CI jobs, all green** on main, run 42278458185: security scans; lint, types and tests on Python 3.11 and 3.12; node 22 expect-pass; node 18 expect-fail; live judge path (Docker); actionlint; ci-ok.
 - **`scripts/judge.py`: 8/8 with Docker.** Without Docker: 7 PASS and 1 SKIP (check 8).
 - **Docker container check: 5/5**, run locally and in CI.
@@ -100,7 +100,7 @@ python -m bailiff.demo --offline
 From the "Honest limits" section of `README.md`, and the privacy limits. For scaling limits, see "Scaling and limits" in README.md.
 
 - The offline demo is SIMULATED: an in-memory room, scripted agents and canned output.
-- Live mode ran against a real Switch 0.31.0 server, but the recorded machine agents are scripted. Real Claude Code Alice and Bob are in progress. See section 3.
+- Live mode ran against a real Switch 0.31.0 server. The recorded machine agents are scripted. A real Claude Code Alice ran in one later live run; real Claude Code Bob is in progress. See section 3.
 - The first GitHub CI run failed `actionlint` and `security` (per `docs/HANDOFF-SUBHASH.md`). Run 42278458185 on main is green.
 - Approval identity is the participant's name, not a signed identity. An attestation records who said yes. It is not a cryptographic signature.
 - The Bailiff does not refuse an approval from someone who is not the probe owner. Owner-refusal is not implemented.

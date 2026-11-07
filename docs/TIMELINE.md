@@ -7,7 +7,7 @@ This file tracks status, owners, and what is left. The idea and the 8-step flow 
 
 ## Status
 
-**As of Nov 7, 2026, 01:30 IST (about 22 hours to the deadline).** The offline core is built and verified on Subhash's Windows PC: the `bailiff/` package, 572 passing pytest tests (about 94% branch coverage), strict mypy and ruff clean, and `python -m bailiff.demo --offline`, which replays 4 of 4 steps on canned fixtures (labelled SIMULATED). Live mode is merged to main and has run once against Switch 0.31.0 with scripted Alice and Bob. The Docker judge path passes (`python scripts/judge.py`, 8 of 8) and CI is 8 jobs, all green. Real Claude Code agents in the room (in progress) and the demo video are not done.
+**As of Nov 7, 2026, 01:30 IST (about 22 hours to the deadline).** The offline core is built and verified on Subhash's Windows PC: the `bailiff/` package, 603 passing pytest tests (about 95% branch coverage), strict mypy and ruff clean, and `python -m bailiff.demo --offline`, which replays 4 of 4 steps on canned fixtures (labelled SIMULATED). Live mode is merged to main. The recorded run used scripted Alice and Bob against Switch 0.31.0; a later run used a real Claude Code Alice via `--alice-agent`, with Bob still scripted. The Docker judge path passes (`python scripts/judge.py`, 8 of 8) and CI is 8 jobs, all green. Real Claude Code Bob (in progress) and the demo video are not done.
 
 | Name | Role | Machine |
 |------|------|---------|
@@ -29,8 +29,8 @@ Owner is Subhash with his AI coding agents unless noted.
 | Item | Notes |
 |------|-------|
 | `bailiff/` Python package | Allow-listed probes, secret redaction, fingerprint and diff, ablation planner and classifier, receipt build/validate/replay, WebSocket transport with pong-and-cursor, reconnect and `taken_over` handling, Bailiff agent loop, scripted alice and bob agents, in-process fake room |
-| Tests and checks | 572 pytest tests pass, about 94% branch coverage; mypy strict and ruff clean |
-| Live mode (`python -m bailiff.demo --live`) | Merged to main. Registers pc-live-bailiff, pc-live-alice and pc-live-bob, runs one case over real WebSockets against Switch 0.31.0. Alice and Bob are scripted agents on canned fixtures (scripted-machine live transport). Transcript: `docs/evidence/transcript.txt` |
+| Tests and checks | 603 pytest tests pass, about 95% branch coverage; mypy strict and ruff clean |
+| Live mode (`python -m bailiff.demo --live`) | Merged to main. Registers pc-live-bailiff and pc-live-bob, plus a scripted Alice unless `--alice-agent` names a Console agent. Runs one case over real WebSockets against Switch 0.31.0. The recorded transcript uses scripted Alice and Bob on canned fixtures. `--alice-agent` swaps in a real Claude Code Alice (one verified live run); Bob stays scripted. Transcript: `docs/evidence/transcript.txt` |
 | Judge path in Docker | `python scripts/judge.py` 8 of 8 with Docker; container check 5 of 5 |
 | CI workflow | 8 jobs, all green |
 | Offline demo | `python -m bailiff.demo --offline` runs the whole story on canned fixtures (labelled SIMULATED), writes `receipt.json`, and replays 4 of 4 steps |
@@ -55,7 +55,7 @@ Owner is Subhash with his AI coding agents unless noted.
 | Item | Owner | Notes |
 |------|-------|-------|
 | Install WSL2 and Docker Desktop on Subhash's PC, on the D: drive | Subhash; Boss supervises the admin install | Plan step 2 |
-| Real Claude Code Alice and Bob in the room | Subhash | In progress. Not claimed done. |
+| Real Claude Code Bob in the room | Subhash | In progress. Not claimed done. Alice: one live run done (`--alice-agent`); show it in the video. |
 | Judge command and `JUDGES.md` | Subhash | |
 | Privacy (PII) masking | Subhash | Planned. See `docs/PARITYCOURT.md`, Privacy. |
 | Property-based tests on redact and parsers | Subhash | |
@@ -75,7 +75,7 @@ Times are planned estimates, not commitments. The only fixed slot is the recordi
 
 | Time (IST) | Step | Owner | Gate or done when |
 |------------|------|-------|-------------------|
-| Nov 6, 17:00–18:00 | 1. Review, commit, push to `feature/subhash`, open PR | Subhash | PR open; Boss merges |
+| Nov 6, 17:00–18:00 | 1. Review, commit, push to `feature/subhash`, open PR against `main` | Subhash | PR open; Boss merges |
 | Nov 6, 18:00–20:00 (est.) | 2. Install WSL2 and Docker Desktop on the D: drive | Subhash; Boss supervises the admin install | Docker runs on Subhash's PC |
 | Nov 6, 20:00–02:00 (est.) | 3. Live mode against a self-hosted Switch (about 6 h) | Subhash | Go/no-go at hour 2 (about 22:00). Go = one full case runs over the real WebSocket. No-go fallback: not yet decided; Boss decides. |
 | Nov 7, 02:00–05:00 (est.) | 4. Judge command, `JUDGES.md`, CI | Subhash; Vatsav runs the judge path | Judge path runs from one command |

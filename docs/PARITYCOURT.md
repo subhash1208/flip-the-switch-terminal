@@ -2,7 +2,7 @@
 
 **Cross-machine bug forensics with receipts.**
 
-"Works on my machine" is now evidence: each machine's own agent testifies, and each owner signs for their own machine.
+"Works on my machine" is now evidence: each machine's own agent testifies, and each machine's owner approves its probes and attests to that machine's side.
 
 Hackathon: [Flip the Switch](https://www.wemakedevs.org/hackathons/switch) (Nov 4–7, 2026)
 Track: 01 — Best Business Workflow ($2,000)
@@ -27,15 +27,15 @@ The person with the working machine can't see the failing machine. The person wi
 
 ## What ParityCourt Does
 
-ParityCourt turns the ping-pong into a case file. One Switch room holds each case. An agent on each real machine gathers evidence. A neutral arbiter, `@bailiff`, keeps the case file as a room document. Humans do only two things: approve probes on their own machine, and attest to results on their own machine.
+ParityCourt turns the ping-pong into a case file. One Switch room holds each case. An agent on each real machine gathers evidence. A neutral arbiter, `@bailiff`, keeps the case file as a room document. Humans do only two things: approve probes on their own machine, and the machine owner attests to that machine's side.
 
 1. Each machine agent fingerprints its own machine and proposes probes. Only that machine's owner can approve them.
 2. The Bailiff compares the two environments and runs one ablation to isolate the cause.
 3. The verdict is a **reproduction receipt**. `receipt.json` lists each ablation step (variable, value, outcome, pinned). A `replay` command re-runs every step and prints the same outcomes.
 4. The fix is verified on the failing machine by re-running the failing test there.
-5. Each owner attests to the result on their own machine.
+5. The machine owner attests to that machine's side.
 
-Approval-gate tools record that a human said yes. ParityCourt's output is a receipt anyone can re-run, with each owner's attestation attached to their own machine's part of it.
+Approval-gate tools record that a human said yes. ParityCourt's output is a receipt anyone can re-run, with each owner's attestation attached to that machine's part of it.
 
 The courtroom names are garnish. The substance is the receipt.
 
@@ -45,11 +45,11 @@ The courtroom names are garnish. The substance is the receipt.
 
 ## The Three Agents
 
-The recorded run and the judge path differ in who runs each agent. In the planned recording, Alice is real Claude Code on a Mac (Santhan's), and Bob is the scripted agent in a `node:18` Linux container on the same Mac. Real Claude Code agents for Alice and Bob in the room are in progress. The judge path is fully scripted and keyless: Alice and Bob are both scripted containers, and no model key is needed. The Bailiff is the arbiter in both. `@alice-claude` and `@bob-codex` are handles only: the names the code and Switch use for each connection. They do not say which tool runs the agent.
+The recorded run and the judge path differ in who runs each agent. In the planned recording, Alice is real Claude Code on a Mac (Santhan's), and Bob is the scripted agent in a `node:18` Linux container on the same Mac. A real Claude Code Alice has run once; a real Claude Code Bob is in progress and is not claimed. The judge path is fully scripted and keyless: Alice and Bob are both scripted containers, and no model key is needed. The Bailiff is the arbiter in both. `@alice-claude` and `@bob-codex` are handles only: the names the code and Switch use for each connection. They do not say which tool runs the agent.
 
 ### Agent 1: `@alice-claude` (Role: `baseline-counsel`)
 
-- **What it is:** Claude Code on Alice's machine: her macOS host in the recorded run. In the judge path, Alice is the scripted agent in a container, with no model key. Either way, it connects to Switch under its own connection id.
+- **What it is:** In the recorded run, Alice is a scripted agent. A real Claude Code Alice ran on a Mac in a later live run, not in the recorded transcript. In the judge path, Alice is the scripted agent in a container, with no model key. In all cases, it connects to Switch under its own connection id.
 - **What it does:** Fingerprints its machine (OS, Node version, filesystem case behaviour, `git config core.ignorecase`, lockfile hashes). Writes the code fix. Optionally pushes the fix branch.
 - **Who controls it:** Only Alice can approve probes on her machine. Switch refuses commands from anyone else (see Step 5).
 
@@ -126,7 +126,7 @@ The Bailiff posts the clean env diff to Room Documents as `env-diff-case-101` an
 |---------|---------------|-------------|---------|
 | A — Timezone/Locale | `TZ=Asia/Kolkata` | `TZ=UTC` | Decoy |
 | B — Stale Shell Flag | Not set | `NODE_OPTIONS=--openssl-legacy-provider` | Decoy |
-| C — Node Major Version | Node 22 (`node:22-bookworm-slim` in the judge path; real Mac in the recorded run) | Node 18 (`node:18-bookworm-slim` in the judge path; `node:18` container in the recorded run) | **Culprit** |
+| C — Node Major Version | Node 22 (`node:22-bookworm-slim` in the judge path; scripted Alice in the recorded run) | Node 18 (`node:18-bookworm-slim` in the judge path; `node:18` container in the recorded run) | **Culprit** |
 
 The same culprit appears in both runs: Node 18 fails, Node 22 passes. Decoys A and B are planted in both runs. The case-only import is a separate, optional bonus clip; see The Sample App.
 
@@ -172,13 +172,13 @@ Opening the PR is optional. Auto-push is a stretch item, not part of the must-ha
 - `@alice-claude` asks Alice to attest to the Mac-side evidence and the fix. Alice taps `[Allow]`.
 - `@bob-codex` asks Bob to attest to the Linux-side evidence and the passing re-run. Bob taps `[Allow]`.
 
-Each owner signs for the result on their own machine. Neither can attest for the other. Attestation records who said yes; it is not a cryptographic signature (see Honest Limits).
+Each machine's owner attests to that machine's side. Neither can attest for the other. Attestation records who said yes; it is not a cryptographic signature (see Honest Limits).
 
 ### Step 8 — Verdict and Replay
 
 The Bailiff posts the verdict to the room and saves `receipt.json`:
 
-> **VERDICT #101**: Culprit: Node major version (`toSorted()` throws on Node 18; Node 22 passes). The decoys (`TZ`, `NODE_OPTIONS`) are ruled out. One ablation shows the cause. The fix is verified on the failing machine. Both owners attested on their own machines.
+> **VERDICT #101**: Culprit: Node major version (`toSorted()` throws on Node 18; Node 22 passes). The decoys (`TZ`, `NODE_OPTIONS`) are ruled out. One ablation shows the cause. The fix is verified on the failing machine. Both machine owners attested to their machine's side.
 
 Each receipt step records the variable, its value, the outcome, and what was pinned (commit, Node version, mount type). The `replay` command re-runs every step and prints the same outcomes. That is the proof anyone can repeat.
 
@@ -195,7 +195,7 @@ The git history is real: an earlier commit renamed `SqlAuthGuard.ts` to `sqlAuth
 ### Culprit: Node-version-dependent API
 
 - The auth path calls `Array.prototype.toSorted()`. The method landed in Node 20 (UNVERIFIED: not yet confirmed against the Node changelog; confirm by running).
-- Alice's side runs it on Node 22 (real Claude Code on the Mac in the recorded run; `node:22-bookworm-slim` container in the judge path), and the test passes.
+- Alice's side runs it on Node 22 (a scripted Alice in the recorded run; a real Claude Code Alice ran on a Mac in a later live run, not in the recorded transcript; `node:22-bookworm-slim` container in the judge path), and the test passes.
 - Bob's container (`node:18-bookworm-slim` in the judge path; `node:18` container in the recorded run) throws a TypeError, so the auth path fails and the test goes red (verified: container check 5 of 5).
 - Deterministic: both images are meant to be pinned by digest in `deploy/docker-compose.yml` `(to be verified)` and stay on glibc. No privileges and no host-specific behaviour.
 
@@ -295,14 +295,14 @@ For the README:
 
 - **Approval identity is the participant's name, not a signed identity.** An attestation records who said yes. It is not a cryptographic signature.
 - **Probes are allow-listed.** Agents run only the commands on the approved list. They never read `.env` files.
-- **Real vs simulated.** Built and tested offline: the receipt, the replay, the redactor and the in-memory room. Live mode is merged to main and has run once against a real Switch 0.31.0 server with scripted Alice and Bob ([`docs/evidence/transcript.txt`](evidence/transcript.txt)). Owner-scoped addressing live test: `(to be verified)`. Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The planned recording uses real Claude Code for Alice on the Mac and a Node 18 container for Bob; real Claude Code agents are in progress. The case-only import is an optional bonus clip that the judge containers do not reproduce. The 80–150 second recording is planned, not yet recorded.
+- **Real vs simulated.** Built and tested offline: the receipt, the replay, the redactor and the in-memory room. Live mode is merged to main and has run once against a real Switch 0.31.0 server with scripted Alice and Bob ([`docs/evidence/transcript.txt`](evidence/transcript.txt)). Owner-scoped addressing live test: `(to be verified)`. Simulated in the judge path: both sides are Node containers (Node 22 and Node 18), not a Mac or an Ubuntu box. The planned recording uses real Claude Code for Alice on the Mac and a Node 18 container for Bob; a real Claude Code Alice has run once, and a real Claude Code Bob is in progress and not claimed. The case-only import is an optional bonus clip that the judge containers do not reproduce. The 80–150 second recording is planned, not yet recorded.
 - **Switch has no built-in loop breaker or dual sign-off.** Any turn cap or two-owner rule is Bailiff code, and the turn cap is optional.
 - **Masking is regex and checksum, for secrets and personal data.** It is not a guarantee against every format, and whether Switch's guardrail masks real agent replies is unverified. The masking limits are listed under Privacy in the README.
 - **Masked suspects are not ablated.** A suspect whose value contains a placeholder gets verdict `unknown` (`not ablated: value masked`).
 - **No ablation, no verdict.** If nothing could be ablated, the receipt is INCONCLUSIVE.
 - **Verification covers one test.** The fix is verified by re-running the failing test on the failing machine. That is not proof the fix is correct beyond that test.
 - **Owner-only approval is verified in code, not yet live-tested.** See Risks.
-- **Custom agents apparently cannot raise Switch approval cards (unverified).** Those cards belong to Console-run agents such as Claude Code. The scripted agents' owner gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing policy. Real approval cards are expected only once real Claude Code agents join the room (in progress). See Risks.
+- **Custom agents apparently cannot raise Switch approval cards (unverified).** Those cards belong to Console-run agents such as Claude Code. The scripted agents' owner gate is a targeted message to the owner plus an addressed reply, enforced by Switch's addressing policy. A real Claude Code Alice has run once, with Auto mode on; real Claude Code Bob has not run. Approval cards were not observed with Auto mode on. They also cannot be posted for Alice in a Mattermost room (no Mattermost bot exists for her), so approval cards were not demonstrated. See Risks.
 
 ---
 
@@ -329,8 +329,8 @@ The masking code is `bailiff/redact.py`: deterministic, linear-time, idempotent,
 |-------|--------|
 | ruff (lint and format) | Done: clean |
 | mypy, strict, over `bailiff/` | Done: clean |
-| pytest | Done: 572 tests pass |
-| Branch coverage | Done: 94 percent measured. The 90 percent gate is in the CI config; CI is green (8 jobs) |
+| pytest | Done: 603 tests pass |
+| Branch coverage | Done: 95 percent measured. The 90 percent gate is in the CI config; CI is green (8 jobs) |
 | hypothesis property tests (redact, PII masking) | Done: `tests/test_redact_properties.py`, `tests/test_pii_properties.py` |
 | Mutation tests on pure modules | Planned |
 | Ponytail review | Planned |
@@ -349,7 +349,7 @@ The masking code is `bailiff/redact.py`: deterministic, linear-time, idempotent,
 | Switch Core | Self-hosted via Docker (version not asserted here) |
 | Switch Trust CLI | Optional bonus only: `scan` (OpenGrep code analysis) and `eval` (scores a running HTTP agent 0–100%; needs an LLM key). Not in the main plot. |
 | Chat Platform | Mattermost (bundled with Switch) |
-| Agent 1 | Claude Code on Alice's macOS host (recorded run); scripted agent in a container, no model key (judge path) |
+| Agent 1 | Scripted Alice in the recorded run; Claude Code on a Mac in a later live run (not in the recorded transcript); scripted agent in a container, no model key (judge path) |
 | Agent 2 | Scripted Bob agent (judge path: `node:18-bookworm-slim` container; recorded run: `node:18` Linux container on Santhan's Mac) |
 | Agent 3 (Bailiff) | Custom Python, WebSocket/HTTP protocol |
 | Sample App | Node.js `export-service` with auth middleware |
@@ -365,7 +365,7 @@ The masking code is `bailiff/redact.py`: deterministic, linear-time, idempotent,
 |-----------------|----------------------|
 | **Use of Switch (30%)** | One room per case, one connection id per machine agent, owner-scoped addressing, room documents as the case file, two AI vendors on two machines. Remove Switch and nothing works. |
 | **Technical Execution (25%)** | One-command `python scripts/judge.py` (8 of 8 checks with Docker; container check 5 of 5), a two-container judge path with a deterministic bug, a re-runnable receipt with `replay`, pytest and property tests for the Bailiff (built; see Quality). |
-| **Creativity & Impact (25%)** | "Works on my machine" becomes evidence: a receipt anyone can replay, with each owner attesting for their own machine. |
+| **Creativity & Impact (25%)** | "Works on my machine" becomes evidence: a receipt anyone can replay, with each machine's owner attesting to that machine's side. |
 | **Presentation (20%)** | The failed bypass (Bob's command rejected), the owner attestations, `replay` printing the same outcomes, the closing line. |
 
 ---
