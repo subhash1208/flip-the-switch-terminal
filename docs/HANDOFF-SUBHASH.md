@@ -14,7 +14,7 @@ You also need one answer from Hashwanth (Task 6). Do not edit code under `bailif
 
 ## 2. The idea
 
-ParityCourt is cross-machine bug forensics. "Works on my machine" becomes evidence. Two machines each run their own agent in one Switch room, and a custom arbiter, the Bailiff, runs the case. The core is cause isolation: the Bailiff compares both environments, then changes one variable on the failing machine to find the cause. Each owner approves probes on their own machine, and `receipt.json` lets `replay` re-run the result.
+ParityCourt is cross-machine bug forensics. "Works on my machine" becomes evidence. Two machines each run their own agent in one Switch room, and a custom arbiter, the Bailiff, runs the case. The core is cause isolation: the Bailiff compares both environments, then changes one variable on the failing machine to find the cause. The machine owner approves each probe on that machine, and `receipt.json` lets `replay` re-run the result.
 
 Lead with cause isolation. Receipts and replay are crowded (splitbrain, Flipside/gateplus, switch-notary, Countersign). Nobody else does environment drift.
 

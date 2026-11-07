@@ -105,6 +105,10 @@ newer, and a `toSorted is not a function` failure on Node 19 or older.
   Switch room. Alice and Bob in that run are scripted agents: every approval reads
   `auto-approved (scripted agent, no human)`. Neither Claude Code nor Codex appears in it. The
   judge command does not run the live path.
+- A later live run used a real Claude Code Alice (`--alice-agent alice-claude`); Bob stayed
+  scripted. That run is not in the repo transcript, and the judge command does not re-run it.
+  Its Alice attestation reads `UNVERIFIED` or `DECLINED` in the recorded runs. The Bailiff does not
+  validate the string, so a receipt line is not proof that a human approved.
 
 ## Commands
 
@@ -127,4 +131,5 @@ newer, and a `toSorted is not a function` failure on Node 19 or older.
 
 - `README.md` for the project overview.
 - `docs/PARITYCOURT.md` for the design and the demo plan.
-- `docs/evidence/transcript.txt` for the recorded live run (scripted Alice and Bob).
+- `docs/evidence/transcript.txt` for the recorded live run (scripted Alice and Bob). A later run
+  with a real Claude Code Alice is described under Real versus simulated.
