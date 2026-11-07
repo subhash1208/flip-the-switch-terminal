@@ -82,13 +82,27 @@ def room_id_from(reply: dict[str, Any]) -> str:
     return room_id
 
 
-async def _create_room(base: str, bailiff: tuple[str, str], names: list[str]) -> str:
-    """create_room needs an open connection, so the Bailiff opens one with no room claimed yet."""
+async def _create_room(
+    base: str, bailiff: tuple[str, str], names: list[str], chat_user: str | None = None
+) -> str:
+    """create_room needs an open connection, so the Bailiff opens one with no room claimed yet.
+
+    With `chat_user` the room is bridged to the default bridge (Mattermost) and that user is added.
+    """
     agent_id, key = bailiff
     cid = str(uuid.uuid4())
     auth = {"Authorization": f"Bearer {key}"}
     scheme_base = base.replace("http", "ws", 1)  # http->ws, https->wss
     url = f"{scheme_base}/agents/{agent_id}/connection/ws?connection_id={cid}&filter=all&rooms="
+    body: dict[str, Any] = {
+        "name": f"paritycourt-live-{uuid.uuid4().hex[:8]}",
+        "description": "ParityCourt live case",
+        "agent_names": names,
+    }
+    if chat_user:
+        body["user_names"] = [chat_user]
+    else:
+        body["internal_only"] = True
     async with websockets.connect(url, additional_headers=auth) as ws:
         try:
             async with asyncio.timeout(READY_TIMEOUT_S):
@@ -102,12 +116,7 @@ async def _create_room(base: str, bailiff: tuple[str, str], names: list[str]) ->
             resp = await http.post(
                 f"/agents/{agent_id}/ops/create_room",
                 headers={**auth, "X-Switch-Connection-Id": cid},
-                json={
-                    "name": f"paritycourt-live-{uuid.uuid4().hex[:8]}",
-                    "description": "ParityCourt live case",
-                    "agent_names": names,
-                    "internal_only": True,
-                },
+                json=body,
             )
     if not resp.is_success:
         raise LiveError(f"create_room failed with HTTP {resp.status_code}: {resp.text[:200]}")
@@ -162,12 +171,17 @@ async def _await_join(bailiff: SwitchConnection, room: str, handle: str) -> None
 
 
 async def run_live(
-    base: str, token: str, evidence: Path, alice_agent: str | None = None
+    base: str,
+    token: str,
+    evidence: Path,
+    alice_agent: str | None = None,
+    chat_user: str | None = None,
 ) -> dict[str, Any]:
     """Run one case on `base`; writes transcript.txt and receipt.json to `evidence`.
 
     `alice_agent` is a Console-registered agent that plays Alice in place of the scripted one.
     Nothing registers or connects it: it is named in create_room, and Switch must accept that.
+    `chat_user` makes the room a Mattermost channel with that user in it, visible in Console.
     """
     scripted = not alice_agent
     alice = alice_agent or LIVE["alice"]
@@ -177,8 +191,19 @@ async def run_live(
     async with httpx.AsyncClient(base_url=base, timeout=10, headers=headers) as http:
         keys = {name: await _register(http, name) for name in registered}
     try:
-        room = await _create_room(base, keys[BAILIFF], names)
+        room = await _create_room(base, keys[BAILIFF], names, chat_user)
     except LiveError as exc:
+        if chat_user:
+            text = str(exc).lower()
+            hint = ""
+            if "turned off" in text or "channel creation" in text:
+                hint = " (allow channel creation for this connection in Console)"
+            elif "bridge" in text:
+                hint = " (is the default Mattermost bridge running?)"
+            who = f" with @{alice_agent}" if alice_agent else ""
+            raise LiveError(
+                f"could not create a Mattermost room for {chat_user}{who}: {exc}{hint}"
+            ) from exc
         if scripted:
             raise
         raise LiveError(f"could not create the room with @{alice}: {exc}") from exc

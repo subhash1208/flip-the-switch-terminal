@@ -150,7 +150,9 @@ def test_alice_agent_reaches_the_live_run_only_when_given(
 ) -> None:
     seen: list[str | None] = []
 
-    def live_demo(evidence: Path = demo.EVIDENCE, alice_agent: str | None = None) -> int:
+    def live_demo(
+        evidence: Path = demo.EVIDENCE, alice_agent: str | None = None, chat_user: str | None = None
+    ) -> int:
         seen.append(alice_agent)
         return 0
 
@@ -165,7 +167,9 @@ def test_alice_agent_cannot_reuse_a_scripted_live_name(
 ) -> None:
     seen: list[str | None] = []
 
-    def live_demo(evidence: Path = demo.EVIDENCE, alice_agent: str | None = None) -> int:
+    def live_demo(
+        evidence: Path = demo.EVIDENCE, alice_agent: str | None = None, chat_user: str | None = None
+    ) -> int:
         seen.append(alice_agent)
         return 0
 
@@ -192,7 +196,11 @@ def _live_returning(receipt: dict[str, Any]) -> Any:
     """A stand-in for run_live: writes the receipt where the real run would, then returns it."""
 
     async def live_run(
-        base: str, token: str, evidence: Path, alice_agent: str | None = None
+        base: str,
+        token: str,
+        evidence: Path,
+        alice_agent: str | None = None,
+        chat_user: str | None = None,
     ) -> dict[str, Any]:
         save_receipt(receipt, str(evidence / "receipt.json"))
         return receipt
@@ -215,7 +223,11 @@ def test_a_live_failure_prints_the_reason_and_exits_1(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     async def refused(
-        base: str, token: str, evidence: Path, alice_agent: str | None = None
+        base: str,
+        token: str,
+        evidence: Path,
+        alice_agent: str | None = None,
+        chat_user: str | None = None,
     ) -> dict[str, Any]:
         raise failure
 
@@ -267,3 +279,49 @@ def test_a_live_receipt_that_fails_validation_is_a_named_error(
     monkeypatch.setattr(demo, "replay", invalid)
     assert demo.run_live_demo(tmp_path) == 1
     assert "error: invalid receipt: receipt.steps" in capsys.readouterr().out
+
+
+def test_chat_user_reaches_the_live_run_only_when_given(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str | None] = []
+
+    def live_demo(
+        evidence: Path = demo.EVIDENCE, alice_agent: str | None = None, chat_user: str | None = None
+    ) -> int:
+        seen.append(chat_user)
+        return 0
+
+    monkeypatch.setattr(demo, "run_live_demo", live_demo)
+    assert main(["--live", "--chat-user", "user"]) == 0
+    assert main(["--live"]) == 0
+    assert seen == ["user", None]
+
+
+def test_chat_user_without_live_is_refused_and_exits_2(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert main(["--offline", "--chat-user", "user"]) == 2
+    assert "error: --chat-user needs --live" in capsys.readouterr().out
+
+
+def test_chat_user_names_the_mattermost_channel_before_the_run(
+    live_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    seen: list[str | None] = []
+
+    async def refused(
+        base: str,
+        token: str,
+        evidence: Path,
+        alice_agent: str | None = None,
+        chat_user: str | None = None,
+    ) -> dict[str, Any]:
+        seen.append(chat_user)
+        raise LiveError("stop before the case")
+
+    monkeypatch.setattr(demo, "run_live", refused)
+    assert demo.run_live_demo(tmp_path, chat_user="user") == 1
+    assert seen == ["user"]
+    assert "LIVE: asking Switch for a Mattermost channel for @user" in capsys.readouterr().out

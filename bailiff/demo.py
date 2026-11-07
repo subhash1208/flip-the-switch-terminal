@@ -100,7 +100,9 @@ def privacy_line(messages: list[tuple[str, str]]) -> str:
     return f"privacy: masked {parts} (placeholders seen in the room transcript)"
 
 
-def run_live_demo(evidence: Path = EVIDENCE, alice_agent: str | None = None) -> int:
+def run_live_demo(
+    evidence: Path = EVIDENCE, alice_agent: str | None = None, chat_user: str | None = None
+) -> int:
     base = os.environ.get("BAILIFF_BASE_URL")
     token = os.environ.get("SWITCH_REGISTRATION_TOKEN")
     if not base or not token:
@@ -109,8 +111,12 @@ def run_live_demo(evidence: Path = EVIDENCE, alice_agent: str | None = None) -> 
     print(f"LIVE: running against a real Switch server at {base} (not simulated)")
     if alice_agent:
         print(f"LIVE: Alice is @{alice_agent}, a real agent (not scripted)")
+    if chat_user:
+        print(f"LIVE: asking Switch for a Mattermost channel for @{chat_user}")
     try:
-        receipt = asyncio.run(run_live(base, token, evidence, alice_agent=alice_agent))
+        receipt = asyncio.run(
+            run_live(base, token, evidence, alice_agent=alice_agent, chat_user=chat_user)
+        )
     except (
         LiveError,
         OpError,
@@ -146,6 +152,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--alice-agent", metavar="NAME", help="with --live: a Console agent plays Alice"
     )
+    parser.add_argument(
+        "--chat-user",
+        metavar="NAME",
+        help="with --live: create the room in Mattermost for this user so the case is visible"
+        " in Console",
+    )
     default_receipt = os.environ.get("RECEIPT_PATH", "receipt.json")
     parser.add_argument("--receipt", type=Path, default=Path(default_receipt))
     args = parser.parse_args(argv)
@@ -153,9 +165,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.alice_agent in {BAILIFF, *LIVE.values()}:
             print(f"error: --alice-agent {args.alice_agent} is a scripted pc-live name")
             return 2
-        return run_live_demo(alice_agent=args.alice_agent)
+        return run_live_demo(alice_agent=args.alice_agent, chat_user=args.chat_user)
     if args.alice_agent:
         print("error: --alice-agent needs --live")
+        return 2
+    if args.chat_user:
+        print("error: --chat-user needs --live")
         return 2
     if not args.offline:
         print("error: choose a mode: --offline or --live")

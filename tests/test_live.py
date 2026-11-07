@@ -167,7 +167,9 @@ def live_room(monkeypatch: pytest.MonkeyPatch) -> FakeRoom:
     async def register(http: httpx.AsyncClient, name: str) -> tuple[str, str]:
         return name, "key"
 
-    async def create_room(base: str, bailiff: tuple[str, str], names: list[str]) -> str:
+    async def create_room(
+        base: str, bailiff: tuple[str, str], names: list[str], chat_user: str | None = None
+    ) -> str:
         return "room-live"
 
     def join(base: str, agent_id: str, key: str, cid: str, rooms: list[str]) -> _Joined:
@@ -326,7 +328,9 @@ def _spy_on_create_room(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """Record the agent names each create_room call names, then return a room as usual."""
     named: list[list[str]] = []
 
-    async def create_room(base: str, bailiff: tuple[str, str], names: list[str]) -> str:
+    async def create_room(
+        base: str, bailiff: tuple[str, str], names: list[str], chat_user: str | None = None
+    ) -> str:
         named.append(names)
         return "room-live"
 
@@ -356,7 +360,9 @@ async def test_real_alice_is_named_when_the_room_is_created(
 async def test_real_alice_refused_at_room_creation_is_a_named_error(
     live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    async def refuse(base: str, bailiff: tuple[str, str], names: list[str]) -> str:
+    async def refuse(
+        base: str, bailiff: tuple[str, str], names: list[str], chat_user: str | None = None
+    ) -> str:
         raise LiveError("create_room failed with HTTP 422: unknown agent alice-claude")
 
     monkeypatch.setattr(live, "_create_room", refuse)
@@ -423,3 +429,124 @@ async def test_real_alice_who_joins_but_never_replies_is_a_named_error(
     with pytest.raises(LiveError, match="no receipt within"):
         await live.run_live("http://switch.test", "tok", tmp_path, alice_agent="alice-claude")
     assert not (tmp_path / "receipt.json").exists()
+
+
+def _capture_create_room(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Run the real _create_room against a mocked Switch and record each create_room body sent."""
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json={"result": {"id": "room-1"}})
+
+    class _Socket:
+        async def __aenter__(self) -> _Socket:
+            return self
+
+        async def __aexit__(self, *exc: object) -> None:
+            return None
+
+        async def recv(self) -> str:
+            return "{}"
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(live.websockets, "connect", lambda url, **kw: _Socket())
+    monkeypatch.setattr(
+        live.httpx,
+        "AsyncClient",
+        lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw),
+    )
+    return sent
+
+
+def test_default_room_is_internal_only_and_names_no_user(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent = _capture_create_room(monkeypatch)
+    room = asyncio.run(live._create_room("http://switch.test", ("agent-1", "k"), ["pc-live-bob"]))
+    assert room == "room-1"
+    assert sent[0]["internal_only"] is True
+    assert sent[0]["agent_names"] == ["pc-live-bob"]
+    assert "user_names" not in sent[0]
+
+
+def test_chat_room_drops_internal_only_and_adds_the_chat_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent = _capture_create_room(monkeypatch)
+    asyncio.run(live._create_room("http://switch.test", ("agent-1", "k"), ["pc-live-bob"], "user"))
+    assert "internal_only" not in sent[0]
+    assert sent[0]["user_names"] == ["user"]
+    assert sent[0]["agent_names"] == ["pc-live-bob"]
+
+
+@pytest.mark.parametrize(
+    ("server_text", "hint"),
+    [
+        ("Creating channels is turned off for the 'Mattermost' connection.", "allow channel"),
+        (
+            "Default bridge 'Mattermost' is not running, so the room cannot be bridged.",
+            "is the default Mattermost bridge running?",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_chat_room_refusal_names_the_mattermost_channel_and_the_cause(
+    live_room: FakeRoom,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    server_text: str,
+    hint: str,
+) -> None:
+    async def refuse(
+        base: str, bailiff: tuple[str, str], names: list[str], chat_user: str | None = None
+    ) -> str:
+        raise LiveError(f"create_room failed with HTTP 422: {server_text}")
+
+    monkeypatch.setattr(live, "_create_room", refuse)
+    with pytest.raises(LiveError) as caught:
+        await live.run_live("http://switch.test", "tok", tmp_path, chat_user="user")
+    message = str(caught.value)
+    assert message.startswith("could not create a Mattermost room for user: create_room failed")
+    assert server_text in message
+    assert hint in message
+    assert not (tmp_path / "receipt.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_chat_user_wins_over_real_alice_and_names_her_in_the_refusal(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen: list[str | None] = []
+
+    async def refuse(
+        base: str, bailiff: tuple[str, str], names: list[str], chat_user: str | None = None
+    ) -> str:
+        seen.append(chat_user)
+        raise LiveError("create_room failed with HTTP 422: unknown agent alice-claude")
+
+    monkeypatch.setattr(live, "_create_room", refuse)
+    refusal = r"^could not create a Mattermost room for user with @alice-claude: create_room failed"
+    with pytest.raises(LiveError, match=refusal):
+        await live.run_live(
+            "http://switch.test", "tok", tmp_path, alice_agent="alice-claude", chat_user="user"
+        )
+    assert seen == ["user"]
+    assert not (tmp_path / "receipt.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_chat_user_reaches_the_room_creation(
+    live_room: FakeRoom, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    seen: list[str | None] = []
+
+    async def create_room(
+        base: str, bailiff: tuple[str, str], names: list[str], chat_user: str | None = None
+    ) -> str:
+        seen.append(chat_user)
+        return "room-live"
+
+    monkeypatch.setattr(live, "_create_room", create_room)
+    await asyncio.wait_for(
+        live.run_live("http://switch.test", "tok", tmp_path, chat_user="user"), 30
+    )
+    assert seen == ["user"]
