@@ -44,7 +44,7 @@ Without Docker, `python scripts/judge.py --no-docker` (output from a Windows run
 ```
  #  CHECK                          RESULT  EVIDENCE
  1  python version                 PASS  Python 3.13.14 (needs 3.11+)
- 2  import bailiff                 PASS  imported from D:\Projects\flip-the-switch-terminal\bailiff\__init__.py
+ 2  import bailiff                 PASS  imported from <repo>\bailiff\__init__.py
  3  demo runs offline              PASS  exit 0; replay: 5/5 steps matched (fixture replay, not Docker)
  4  receipt valid, culprit node    PASS  schema valid; culprit variable node, evidence step ablation-2
  5  privacy: no fixture PII        PASS  0 of 12 fixture values found; [redacted] marker in receipt and stdout
@@ -64,7 +64,7 @@ from the team's Docker run and was not re-run for this page:
 ```
  #  CHECK                          RESULT  EVIDENCE
  1  python version                 PASS  Python 3.13.14 (needs 3.11+)
- 2  import bailiff                 PASS  imported from D:\Projects\flip-the-switch-terminal\bailiff\__init__.py
+ 2  import bailiff                 PASS  imported from <repo>\bailiff\__init__.py
  3  demo runs offline              PASS  exit 0; replay: 5/5 steps matched (fixture replay, not Docker)
  4  receipt valid, culprit node    PASS  schema valid; culprit variable node, evidence step ablation-2
  5  privacy: no fixture PII        PASS  0 of 12 fixture values found; [redacted] marker in receipt and stdout

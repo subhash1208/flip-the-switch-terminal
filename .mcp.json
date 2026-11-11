@@ -11,7 +11,7 @@
         "@modelcontextprotocol/server-memory"
       ],
       "env": {
-        "MEMORY_FILE_PATH": "/Users/santhan/Desktop/projects/flip-the-switch-terminal/switch-hackathon-knowledge-graph.jsonl"
+        "MEMORY_FILE_PATH": "${MEMORY_FILE_PATH:-/path/to/flip-the-switch-terminal/switch-hackathon-knowledge-graph.jsonl}"
       }
     },
     "sequential-thinking": {

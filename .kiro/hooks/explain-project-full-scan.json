@@ -1,0 +1,14 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Explain project means full codebase scan",
+      "trigger": "UserPromptSubmit",
+      "description": "Fires only when the prompt asks to explain the whole project or codebase.",
+      "action": {
+        "type": "command",
+        "command": "python .claude/hooks/scripts/explain_project.py"
+      }
+    }
+  ]
+}
